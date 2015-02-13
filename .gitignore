@@ -1,0 +1,4 @@
+*.sqlite3
+/.virtualenv/
+__pycache__/
+*.py[cod]

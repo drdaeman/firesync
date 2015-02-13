@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <title>FireSync</title>
+</head>
+<body>
+    <h1>FireSync</h1>
+
+    <form id="signin">
+        <p><label>Email: <input type="text" name="email" value="" /></label></p>
+        <p><label>Password: <input type="password" name="password" value="" /></label></p>
+        <p><input type="submit" value="Sign in" /></p>
+    </form>
+
+    <script>
+        function send(command, data) {
+            var event = new window.CustomEvent("FirefoxAccountsCommand", {
+                detail: {
+                    command: command,
+                    data: data,
+                    bubbles: true
+                }
+            });
+            window.dispatchEvent(event);
+        }
+
+        this.window.addEventListener("message", function (event) {
+            var result = event.data.content;
+            var type = event.data.type;
+
+            console.log(type);
+            console.log(result);
+            //window.alert(type + ":" + JSON.stringify(result));
+        }, false);
+
+        document.getElementById("signin").addEventListener("submit", function (event) {
+            event.preventDefault();
+
+            var email = this.elements.email.value;
+            var password = this.elements.password.value;
+
+            var r = new XMLHttpRequest();
+            r.open("POST", "/v1/account/login");
+            r.setRequestHeader("Content-Type", "application/json");
+            r.onload = function () {
+                if (this.status == 200) {
+                    var data = JSON.parse(this.responseText);
+                    data["email"] = email;
+                    // data["unwrapBKey"] = unwrapBKey;
+                    send("login", data);
+                }
+            };
+            r.send(JSON.stringify({
+                "email": email,
+                "plaintextPW": password  // This differs from actual protocol. And this is insecure. Fuck me.
+            }));
+        });
+    </script>
+</body>
+</html>
