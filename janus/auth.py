@@ -11,6 +11,10 @@ import mohawk.exc
 import hashlib
 import base64
 import binascii
+import logging
+
+
+logger = logging.getLogger("janus.auth")
 
 
 class MozillaOnePWHasher(BasePasswordHasher):
@@ -62,6 +66,7 @@ def _lookup_token(sender_id):
             "x-token-object": token
         }
     except Token.DoesNotExist:
+        logger.error("No such token: %s", sender_id)
         raise mohawk.exc.CredentialsLookupError("Unknown or invalid token")
 
 
@@ -95,7 +100,8 @@ class HawkAuthenticationMiddleware(object):
             request.hawk_auth_receiver = receiver
             request.hawk_token = receiver.resource.credentials["x-token-object"]
             request.user = request.hawk_token.user
-        except (mohawk.exc.HawkFail, KeyError):
+        except (mohawk.exc.HawkFail, KeyError) as e:
+            logger.error("HAWK request failed: %s", repr(e))
             request.hawk_auth_receiver = None
             request.hawk_token = None
             request.user = None

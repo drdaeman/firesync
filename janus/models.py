@@ -5,9 +5,11 @@ from django.contrib.auth.hashers import make_password
 from django.db import models
 from django.utils.crypto import get_random_string
 from janus.hkdf import Hkdf
+import logging
 
 
 ExpandedToken = collections.namedtuple("ExpandedToken", "token_id hmac_key request_key")
+logger = logging.getLogger("janus.models")
 
 
 def random_token_hex(octets=32):
@@ -44,6 +46,7 @@ class Token(models.Model):
     def issue(cls, token_type, user):
         seed = random_token_hex(32)
         t = cls._expand(seed, token_type)
+        logger.info("Issuing token of type %s for user %s: %s", token_type, user.email, t.token_id)
         return cls.objects.create(token_type=token_type, user=user, token_seed=seed, token_id=t.token_id)
 
     def __repr__(self):

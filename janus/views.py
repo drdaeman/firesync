@@ -14,6 +14,10 @@ import time
 import binascii
 import hashlib
 import hmac
+import logging
+
+
+logger = logging.getLogger("janus.views")
 
 
 class HttpResponseNotAuthorized(HttpResponse):
@@ -33,6 +37,7 @@ def response_json(data, response_class=HttpResponse):
 
 
 def response_error(message, code=400, errno=999, error=_("Bad Request"), response_class=HttpResponseBadRequest):
+    logger.error("Responding with HTTP %s error %s: %s", code, errno, message)
     return response_json({
         "code": code,
         "errno": errno,
@@ -111,6 +116,7 @@ def account_login(request):
         # Dumb client, insecure (but they gave us their password anyway, already)
         r["unwrapBKey"] = binascii.b2a_hex(MozillaOnePWHasher.expand_key(request_body["plaintextPW"],
                                                                          user.email, "unwrapBkey")).decode("ascii")
+    logger.info("User %s was successfully authenticated", user.email)
     return response_json(r)
 
 
@@ -143,6 +149,7 @@ def account_keys(request):
     ciphertext = xor_bytes(payload, xor_key)
     mac = hmac.HMAC(hmac_key, ciphertext, digestmod=hashlib.sha256).digest()
     bundle = binascii.b2a_hex(ciphertext + mac).decode("ascii")
+    logger.info("User %s had fetched their keys", user.email)
     return response_json({
         "bundle": bundle
     })
