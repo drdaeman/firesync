@@ -41,7 +41,7 @@ class Token(models.Model):
 
 
 class Keys(models.Model):
-    user = models.ForeignKey(User, primary_key=True)
+    user = models.OneToOneField(User, primary_key=True)
     kA = models.CharField(max_length=64)
     wkB = models.CharField(max_length=64)
 
