@@ -1,9 +1,4 @@
 from __future__ import unicode_literals, absolute_import
-import binascii
-import hashlib
-import hmac
-
-from django.contrib.auth.decorators import login_required
 from django.http.response import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import render
 from django.utils.crypto import constant_time_compare
@@ -16,6 +11,9 @@ from janus.models import Keys
 from .models import User, Token
 import json
 import time
+import binascii
+import hashlib
+import hmac
 
 
 class HttpResponseNotAuthorized(HttpResponse):
@@ -111,7 +109,8 @@ def account_login(request):
     }
     if "plaintextPW" in request_body:
         # Dumb client, insecure (but they gave us their password anyway, already)
-        r["unwrapBKey"] = binascii.b2a_hex(MozillaOnePWHasher.expand_key(request_body["plaintextPW"], user.email, "unwrapBkey")).decode("ascii")
+        r["unwrapBKey"] = binascii.b2a_hex(MozillaOnePWHasher.expand_key(request_body["plaintextPW"],
+                                                                         user.email, "unwrapBkey")).decode("ascii")
     return response_json(r)
 
 

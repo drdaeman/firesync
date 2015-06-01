@@ -1,13 +1,13 @@
 from django.conf.urls import patterns, include, url
 
-urlpatterns = patterns("",
-    url(r"^signup$", "janus.views.page_signup"),
-    url(r"^signin$", "janus.views.page_signin"),
-    url(r"^force_auth", "janus.views.page_signin"),
+urlpatterns = patterns("janus.views",
+    url(r"^signup$", "page_signup"),
+    url(r"^signin$", "page_signin"),
+    url(r"^force_auth", "page_signin"),
 
-    url(r"^v1/account/create$", "janus.views.account_create"),
-    url(r"^v1/account/status$", "janus.views.account_status"),
-    url(r"^v1/account/login$", "janus.views.account_login"),
-    url(r"^v1/account/devices$", "janus.views.account_devices"),
-    url(r"^v1/account/keys", "janus.views.account_keys"),
+    url(r"^v1/account/create$", "account_create"),
+    url(r"^v1/account/status$", "account_status"),
+    url(r"^v1/account/login$", "account_login"),
+    url(r"^v1/account/devices$", "account_devices"),
+    url(r"^v1/account/keys", "account_keys"),
 )

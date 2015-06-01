@@ -129,7 +129,7 @@ def hkdf_expand(pseudo_random_key, info="", length=32, digest=hashlib.sha512):
     hash_len = digest().digest_size
     length = int(length)
     if length > 255 * hash_len:
-        raise Exception("Cannot expand to more than 255 * %d = %d bytes using the specified hash function" % \
+        raise Exception("Cannot expand to more than 255 * %d = %d bytes using the specified hash function" %
                         (hash_len, 255 * hash_len))
     blocks_needed = length // hash_len + (0 if length % hash_len == 0 else 1)  # ceil
     okm = b""
@@ -167,4 +167,3 @@ class Hkdf(object):
         See the HKDF draft RFC for guidance.
         """
         return hkdf_expand(self._prk, info, length, self._hash)
-

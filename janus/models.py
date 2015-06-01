@@ -7,6 +7,9 @@ from django.utils.crypto import get_random_string
 from janus.hkdf import Hkdf
 
 
+ExpandedToken = collections.namedtuple("ExpandedToken", "token_id hmac_key request_key")
+
+
 def random_token_hex(octets=32):
     return get_random_string(length=octets * 2, allowed_chars="0123456789abcdef")
 
@@ -16,7 +19,6 @@ class User(AbstractUser):
         self.password = make_password(raw_password, salt=self.email)
 
 
-ExpandedToken = collections.namedtuple("ExpandedToken", "token_id hmac_key request_key")
 class Token(models.Model):
     token_id = models.CharField(max_length=64, primary_key=True)
     token_seed = models.CharField(max_length=64, unique=True)
@@ -28,7 +30,9 @@ class Token(models.Model):
         expanded = Hkdf(b"", binascii.a2b_hex(seed))
         if token_type == "keyFetchToken":
             expanded = expanded.expand("identity.mozilla.com/picl/v1/{0}".format(token_type).encode("ascii"), 3 * 32)
-            return ExpandedToken(binascii.b2a_hex(expanded[0:32]), binascii.b2a_hex(expanded[32:64]), binascii.b2a_hex(expanded[64:96]))
+            return ExpandedToken(binascii.b2a_hex(expanded[0:32]),
+                                 binascii.b2a_hex(expanded[32:64]),
+                                 binascii.b2a_hex(expanded[64:96]))
         else:
             expanded = expanded.expand("identity.mozilla.com/picl/v1/{0}".format(token_type).encode("ascii"), 2 * 32)
             return ExpandedToken(binascii.b2a_hex(expanded[0:32]), binascii.b2a_hex(expanded[32:64]), None)

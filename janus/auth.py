@@ -1,16 +1,16 @@
 from __future__ import unicode_literals
-import binascii
 from django.conf import settings
-
 from django.contrib.auth.hashers import BasePasswordHasher, mask_hash
 from django.utils.crypto import pbkdf2, constant_time_compare
 from django.utils.translation import ugettext_lazy as _
 from django.utils.datastructures import SortedDict
-import mohawk, mohawk.exc
-import hashlib
-import base64
 from janus.hkdf import Hkdf
 from janus.models import Token
+import mohawk
+import mohawk.exc
+import hashlib
+import base64
+import binascii
 
 
 class MozillaOnePWHasher(BasePasswordHasher):
@@ -55,7 +55,6 @@ class MozillaOnePWHasher(BasePasswordHasher):
 def _lookup_token(sender_id):
     try:
         token = Token.objects.get(token_id=sender_id)
-        #print("found token: " + repr(token))
         return {
             "id": token.token_id,
             "key": binascii.a2b_hex(token.expand().hmac_key),
@@ -70,7 +69,7 @@ class HawkAuthenticationMiddleware(object):
     @staticmethod
     def process_request(request):
         try:
-            if not "HTTP_AUTHORIZATION" in request.META:
+            if "HTTP_AUTHORIZATION" not in request.META:
                 raise KeyError("No HTTP_AUTHORIZATION")  # Fail before the breakpoint
             uri = request.build_absolute_uri()
             if settings.DEBUG and uri.startswith("http://"):
@@ -96,8 +95,7 @@ class HawkAuthenticationMiddleware(object):
             request.hawk_auth_receiver = receiver
             request.hawk_token = receiver.resource.credentials["x-token-object"]
             request.user = request.hawk_token.user
-        except (mohawk.exc.HawkFail, KeyError) as e:
-            # print("fail: " + repr(e))
+        except (mohawk.exc.HawkFail, KeyError):
             request.hawk_auth_receiver = None
             request.hawk_token = None
             request.user = None
