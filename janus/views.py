@@ -4,7 +4,6 @@ import hashlib
 import hmac
 
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.models import User
 from django.http.response import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import render
 from django.utils.crypto import constant_time_compare
@@ -14,7 +13,7 @@ from django.views.decorators.csrf import csrf_exempt
 from .auth import MozillaOnePWHasher
 from janus.hkdf import Hkdf
 from janus.models import Keys
-from .models import Token
+from .models import User, Token
 import json
 import time
 

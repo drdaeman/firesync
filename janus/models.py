@@ -1,6 +1,7 @@
 import collections
 import binascii
-from django.contrib.auth.models import User
+from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.hashers import make_password
 from django.db import models
 from django.utils.crypto import get_random_string
 from janus.hkdf import Hkdf
@@ -8,6 +9,11 @@ from janus.hkdf import Hkdf
 
 def random_token_hex(octets=32):
     return get_random_string(length=octets * 2, allowed_chars="0123456789abcdef")
+
+
+class User(AbstractUser):
+    def set_password(self, raw_password):
+        self.password = make_password(raw_password, salt=self.email)
 
 
 ExpandedToken = collections.namedtuple("ExpandedToken", "token_id hmac_key request_key")

@@ -53,6 +53,7 @@ MIDDLEWARE_CLASSES = (
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 )
 
+AUTH_USER_MODEL = 'janus.User'
 PASSWORD_HASHERS = ('janus.auth.MozillaOnePWHasher',) + global_settings.PASSWORD_HASHERS
 
 ROOT_URLCONF = 'firesync.urls'
