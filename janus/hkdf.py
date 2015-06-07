@@ -100,6 +100,7 @@ material:
 
 import hmac
 import hashlib
+import six
 
 
 def hkdf_extract(salt, input_key_material, digest=hashlib.sha512):
@@ -109,13 +110,13 @@ def hkdf_extract(salt, input_key_material, digest=hashlib.sha512):
     provided hash (default SHA-512).
 
     salt should be a random, application-specific byte string. If
-    salt is None or the empty string, an all-zeros string of the same
-    length as the hash's block size will be used instead per the RFC.
+    salt is None, an all-zeros string of the same length as
+    the hash's block size will be used instead per the RFC.
 
     See the HKDF draft RFC and paper for usage notes.
     """
     hash_len = digest().digest_size
-    if salt is None or len(salt) == 0:
+    if salt is None:
         salt = bytes(hash_len)
     return hmac.new(salt, input_key_material, digest).digest()
 
@@ -135,7 +136,7 @@ def hkdf_expand(pseudo_random_key, info="", length=32, digest=hashlib.sha512):
     okm = b""
     output_block = b""
     for counter in range(blocks_needed):
-        output_block = hmac.new(pseudo_random_key, output_block + info + bytes([counter + 1]), digest).digest()
+        output_block = hmac.new(pseudo_random_key, output_block + info + six.int2byte(counter + 1), digest).digest()
         okm += output_block
     return okm[:length]
 
