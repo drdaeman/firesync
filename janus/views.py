@@ -9,6 +9,7 @@ from .auth import MozillaOnePWHasher
 from janus.hkdf import Hkdf
 from janus.models import Keys
 from .models import User, Token
+import six
 import json
 import time
 import binascii
@@ -26,7 +27,7 @@ class HttpResponseNotAuthorized(HttpResponse):
 
 def xor_bytes(a, b):
     assert len(a) == len(b)
-    return bytes(map(lambda pair: pair[0] ^ pair[1], zip(a, b)))
+    return bytes(bytearray(map(lambda pair: pair[0] ^ pair[1], zip(six.iterbytes(a), six.iterbytes(b)))))
 
 
 def response_json(data, response_class=HttpResponse):
