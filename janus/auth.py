@@ -101,7 +101,8 @@ class HawkAuthenticationMiddleware(object):
             request.hawk_token = receiver.resource.credentials["x-token-object"]
             request.user = request.hawk_token.user
         except (mohawk.exc.HawkFail, KeyError) as e:
-            logger.error("HAWK request failed: %s", repr(e))
+            if not isinstance(e, KeyError):
+                logger.error("HAWK request failed: %s", repr(e))
             request.hawk_auth_receiver = None
             request.hawk_token = None
             request.user = None

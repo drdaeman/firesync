@@ -30,6 +30,7 @@ def xor_bytes(a, b):
 
 
 def response_json(data, response_class=HttpResponse):
+    logger.debug("JSON response: %s", json.dumps(data))
     r = response_class(json.dumps(data), content_type="application/json")
     if r.status_code == 200:
         r["Timestamp"] = int(time.time())

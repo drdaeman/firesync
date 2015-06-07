@@ -46,7 +46,7 @@ class Token(models.Model):
     def issue(cls, token_type, user):
         seed = random_token_hex(32)
         t = cls._expand(seed, token_type)
-        logger.info("Issuing token of type %s for user %s: %s", token_type, user.email, t.token_id)
+        logger.debug("Issuing token of type %s for user %s: %s -> %s", token_type, user.email, seed, repr(t))
         return cls.objects.create(token_type=token_type, user=user, token_seed=seed, token_id=t.token_id)
 
     def __repr__(self):
