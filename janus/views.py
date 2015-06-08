@@ -3,9 +3,12 @@ from django.http.response import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import render
 from django.utils.crypto import constant_time_compare
 from django.utils.translation import ugettext as _
+from django.conf import settings
 from decorator import decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from jwkest.jws import JWS
+from jwkest.jwk import SYMKey
 from .auth import MozillaOnePWHasher
 from janus.hkdf import Hkdf
 from janus.models import Keys
@@ -156,6 +159,35 @@ def account_keys(request):
     return response_json({
         "bundle": bundle
     })
+
+
+@csrf_exempt
+@require_POST
+@hawk_required("sessionToken")
+def certificate_sign(request):
+    user = request.hawk_token.user
+    data = json.loads(request.body)
+    assert "publicKey" in data, "Missing publicKey"  # TODO: Proper validation
+    assert "duration" in data, "Missing duration"
+    now = int(time.time())
+
+    # You may consider using another algorithms.
+    # For now, it's the implemented in the simplest manner possible.
+    key = SYMKey(key=settings.SECRET_KEY, alg="HS256")
+    jws = JWS(json.dumps({
+        "public-key": data["publicKey"],
+        "principal": {
+            "email": user.email,
+        },
+        "iat": now - (10 * 1000),
+        "exp": now + data["duration"],
+        "fxa-generation": 0,
+        "fxa-lastAuthAt": 0,
+        "fxa-verifiedEmail": user.email
+    }), alg="HS256")
+    cert = jws.sign_compact([key])
+
+    return response_json({"cert": cert})
 
 
 @csrf_exempt
