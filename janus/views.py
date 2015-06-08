@@ -5,6 +5,7 @@ from django.utils.crypto import constant_time_compare
 from django.utils.translation import ugettext as _
 from decorator import decorator
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 from .auth import MozillaOnePWHasher
 from janus.hkdf import Hkdf
 from janus.models import Keys
@@ -155,6 +156,14 @@ def account_keys(request):
     return response_json({
         "bundle": bundle
     })
+
+
+@csrf_exempt
+@require_POST
+@hawk_required("sessionToken")
+def session_destroy(request):
+    request.hawk_token.delete()
+    return response_json({})
 
 
 @csrf_exempt
