@@ -3,13 +3,11 @@ from django.http.response import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import render
 from django.utils.crypto import constant_time_compare
 from django.utils.translation import ugettext as _
-from django.conf import settings
 from decorator import decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from jwkest.jws import JWS
-from jwkest.jwk import SYMKey
-from .auth import MozillaOnePWHasher
+from .auth import MozillaOnePWHasher, get_browserid_key
 from janus.hkdf import Hkdf
 from janus.models import Keys
 from .models import User, Token
@@ -169,22 +167,22 @@ def certificate_sign(request):
     data = json.loads(request.body)
     assert "publicKey" in data, "Missing publicKey"  # TODO: Proper validation
     assert "duration" in data, "Missing duration"
-    now = int(time.time())
+    now = int(time.time() * 1000)
 
-    # You may consider using another algorithms.
-    # For now, it's the implemented in the simplest manner possible.
-    key = SYMKey(key=settings.SECRET_KEY, alg="HS256")
+    key = get_browserid_key()
+
     jws = JWS(json.dumps({
         "public-key": data["publicKey"],
         "principal": {
             "email": user.email,
         },
+        "iss": "localhost:8000",
         "iat": now - (10 * 1000),
         "exp": now + data["duration"],
         "fxa-generation": 0,
         "fxa-lastAuthAt": 0,
         "fxa-verifiedEmail": user.email
-    }), alg="HS256")
+    }), alg=b"RS256")  # Beware: if we'd use u"RS256" here, things will go wrong and we'll have {"alg":null}
     cert = jws.sign_compact([key])
 
     return response_json({"cert": cert})
@@ -196,6 +194,17 @@ def certificate_sign(request):
 def session_destroy(request):
     request.hawk_token.delete()
     return response_json({})
+
+
+@csrf_exempt
+def token_sync(request):
+    return response_json({
+        "id": "badid",
+        "key": "badkey",
+        "uid": 12345,
+        "api_endpoint": "https://localhost:8000/sync/1.5/",
+        "duration": 3600,
+    })
 
 
 @csrf_exempt

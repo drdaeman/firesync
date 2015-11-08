@@ -10,8 +10,8 @@ urlpatterns = patterns("janus.views",
     url(r"^v1/account/login$", "account_login"),
     url(r"^v1/account/devices$", "account_devices"),
     url(r"^v1/account/keys", "account_keys"),
-
     url(r"^v1/certificate/sign", "certificate_sign"),
-
     url(r"^v1/session/destroy", "session_destroy"),
+
+    url(r"^1\.0/sync/1\.5$", "token_sync"),
 )

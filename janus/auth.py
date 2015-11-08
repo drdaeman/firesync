@@ -8,6 +8,7 @@ from janus.hkdf import Hkdf
 from janus.models import Token
 import mohawk
 import mohawk.exc
+import browserid
 import hashlib
 import base64
 import binascii
@@ -76,6 +77,9 @@ class HawkAuthenticationMiddleware(object):
         try:
             if "HTTP_AUTHORIZATION" not in request.META:
                 raise KeyError("No HTTP_AUTHORIZATION")  # Fail before the breakpoint
+            authorization = request.META["HTTP_AUTHORIZATION"]
+            if not authorization.lower().startswith("hawk "):
+                raise KeyError("Not a HAWK authorization")
             uri = request.build_absolute_uri()
             if settings.DEBUG and uri.startswith("http://"):
                 # Hax since stunnel doesn't add any headers for us.
@@ -91,7 +95,7 @@ class HawkAuthenticationMiddleware(object):
                 content = request.body
             receiver = mohawk.Receiver(
                 _lookup_token,
-                request.META["HTTP_AUTHORIZATION"],
+                authorization,
                 uri,
                 request.method,
                 content=content,
@@ -106,3 +110,53 @@ class HawkAuthenticationMiddleware(object):
             request.hawk_auth_receiver = None
             request.hawk_token = None
             request.user = None
+
+
+class BrowserIDAuthenticationMiddleware(object):
+    @staticmethod
+    def process_request(request):
+        try:
+            if "HTTP_AUTHORIZATION" not in request.META:
+                raise KeyError("No HTTP_AUTHORIZATION")  # Fail before the breakpoint
+            authorization = request.META["HTTP_AUTHORIZATION"]
+            if not authorization.lower().startswith("browserid "):
+                raise KeyError("Not a BrowserID authorization")
+
+            authorization = authorization.split(" ", 1)
+            verifier = BrowserIDLocalVerifier()
+            print(repr(verifier.verify(authorization[1])))
+        except KeyError:
+            pass
+
+
+class BrowserIDLocalTrustSupport(object):
+    def is_trusted_issuer(self, hostname, issuer, trusted_secondaries):
+        print("is_trusted_issuer: %s, %s, %r" % (hostname, issuer, trusted_secondaries))
+        return issuer in trusted_secondaries
+
+    def get_key(self, issuer):
+        if issuer == "localhost:8000":
+            return get_browserid_key().serialize()
+        else:
+            raise NotImplementedError("Can't get key for %s" % issuer)
+
+
+class BrowserIDLocalVerifier(browserid.LocalVerifier):
+    def __init__(self, warning=True):
+        super(BrowserIDLocalVerifier, self).__init__(
+            audiences=["https://localhost:8000"],
+            trusted_secondaries=["localhost:8000"],
+            supportdocs=BrowserIDLocalTrustSupport(),
+            warning=warning
+        )
+
+
+_RSAKEY = None
+def get_browserid_key():
+    global _RSAKEY
+    from Crypto.PublicKey import RSA
+    from jwkest.jwk import RSAKey
+    if _RSAKEY is None:
+        _RSAKEY = RSA.generate(1024)  # Totally insecure!
+        logger.info("Generated RSA keypair")
+    return RSAKey(kid=b"rsa1", key=_RSAKEY)  # It's important that kid is a byte string, not unicode
