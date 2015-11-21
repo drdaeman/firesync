@@ -4,3 +4,4 @@ decorator
 mohawk
 pyjwkest
 pybrowserid
+m2crypto
