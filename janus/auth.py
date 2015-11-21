@@ -115,6 +115,7 @@ class HawkAuthenticationMiddleware(object):
 class BrowserIDAuthenticationMiddleware(object):
     @staticmethod
     def process_request(request):
+        authorization = None
         try:
             if "HTTP_AUTHORIZATION" not in request.META:
                 raise KeyError("No HTTP_AUTHORIZATION")  # Fail before the breakpoint
@@ -123,10 +124,15 @@ class BrowserIDAuthenticationMiddleware(object):
                 raise KeyError("Not a BrowserID authorization")
 
             authorization = authorization.split(" ", 1)
+            assert authorization[0].lower() == "browserid"
+            authorization = authorization[1]
             verifier = BrowserIDLocalVerifier()
-            print(repr(verifier.verify(authorization[1])))
+            print("BrowserIDAuthMW: Verified: %s" % repr(verifier.verify(authorization)))
         except KeyError:
             pass
+        except Exception as e:
+            print("BrowserIDAuthMW: Exception: %s" % repr(e))
+            print("BrowserIDAuthMW: Authorization was: %s" % repr(authorization))
 
 
 class BrowserIDLocalTrustSupport(object):
@@ -136,7 +142,11 @@ class BrowserIDLocalTrustSupport(object):
 
     def get_key(self, issuer):
         if issuer == "localhost:8000":
-            return get_browserid_key().serialize()
+            key = get_browserid_key()
+            key = {_k: getattr(key, _k) for _k in list(set(key.public_members) & set(key.longs))}
+            if "algorithm" not in key:
+                key["algorithm"] = "RS"
+            return key
         else:
             raise NotImplementedError("Can't get key for %s" % issuer)
 
