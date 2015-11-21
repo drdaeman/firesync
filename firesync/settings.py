@@ -12,6 +12,45 @@ https://docs.djangoproject.com/en/1.6/ref/settings/
 import os
 from django.conf import global_settings
 
+
+# Lock down insecure pure-Python fallback RSA implementation in PyBrowserID
+def _lock_down_insecure_crypto():
+    from browserid.crypto import fallback
+
+    class DisabledInsecureImplementation(object):
+        @classmethod
+        def _fail(self):
+            # Pure-Python fallback RSA-OAEP implementation is broken in all senses.
+            # First of all, it doesn't work - it can't even validate a signature.
+            # But even if it would, it's implemented in an awfully naive way,
+            # that's at the very least is prone to timing attacks, if not worse.
+            # I'm not a cryptographer, but the code I saw just cried of that.
+            #
+            # So, let's avoid it.
+            #
+            # HINT: If M2Crypto fails for you, try a specific version.
+            # Say, 0.22.3 from PyPI does the trick for me, while 0.22.5 fails complaining
+            # that my OpenSSL doesn't export SSLv2_method symbol.
+            raise RuntimeError("You MUST install M2Crypto for PyBrowserID.")
+
+        def __init__(self):
+            self._fail()
+
+        @classmethod
+        def sign(cls, data):
+            cls._fail()
+
+        @classmethod
+        def verify(cls, data, signature):
+            cls._fail()
+
+    for class_name in ["Key", "RSKey", "DSKey"]:
+        setattr(getattr(fallback, class_name), "sign", DisabledInsecureImplementation.sign)
+        setattr(getattr(fallback, class_name), "verify", DisabledInsecureImplementation.verify)
+        setattr(fallback, class_name, DisabledInsecureImplementation)
+_lock_down_insecure_crypto()
+
+
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 
 
