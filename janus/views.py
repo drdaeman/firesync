@@ -79,7 +79,7 @@ def account_create(request):
 
 @csrf_exempt
 def account_status(request):
-    uid = request.REQUEST.get("uid", "").strip()
+    uid = request.POST.get("uid", request.GET.get("uid", "")).strip()
     if uid == "":
         return response_error(_("Missing or empty UID"), errno=108)
     return response_json({"exists": User.objects.filter(username=uid).count() > 0})
