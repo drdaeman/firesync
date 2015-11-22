@@ -4,10 +4,7 @@ from django.contrib import admin
 admin.autodiscover()
 
 urlpatterns = patterns('',
-    # Examples:
-    # url(r'^$', 'firesync.views.home', name='home'),
-    # url(r'^blog/', include('blog.urls')),
-
+    url(r'^sync/1\.5/', include("mnemosyne.urls")),
     url(r'^', include("janus.urls")),
 
     url(r'^admin/', include(admin.site.urls)),
