@@ -1,5 +1,5 @@
 from __future__ import unicode_literals, absolute_import
-from django.http.response import HttpResponse, HttpResponseBadRequest
+from django.http.response import HttpResponse, HttpResponseBadRequest, HttpResponseServerError
 from django.shortcuts import render
 from django.utils.crypto import constant_time_compare
 from django.utils.translation import ugettext as _
@@ -32,22 +32,23 @@ def xor_bytes(a, b):
     return bytes(bytearray(map(lambda pair: pair[0] ^ pair[1], zip(six.iterbytes(a), six.iterbytes(b)))))
 
 
-def response_json(data, response_class=HttpResponse):
+def response_json(data, response_class=HttpResponse, timestamp_header="Timestamp", timestamp_on=[200]):
     logger.debug("JSON response: %s", json.dumps(data))
     r = response_class(json.dumps(data), content_type="application/json")
-    if r.status_code == 200:
-        r["Timestamp"] = int(time.time())
+    if r.status_code in timestamp_on and timestamp_header is not None:
+        r[timestamp_header] = int(time.time())
     return r
 
 
-def response_error(message, code=400, errno=999, error=_("Bad Request"), response_class=HttpResponseBadRequest):
+def response_error(message, code=400, errno=999, error=_("Bad Request"), response_class=HttpResponseBadRequest,
+                   timestamp_header=None):
     logger.error("Responding with HTTP %s error %s: %s", code, errno, message)
     return response_json({
         "code": code,
         "errno": errno,
         "error": error,
         "message": message
-    }, response_class=response_class)
+    }, response_class=response_class, timestamp_header=timestamp_header, timestamp_on=[code])
 
 
 def hawk_required(token_type):
@@ -69,6 +70,40 @@ def hawk_required(token_type):
                 response_class=HttpResponseNotAuthorized)
         return f(request, *args, **kwargs)
     return _hawk_required
+
+
+def browserid_required(**error_options):
+    # TODO: Add extra validations, in particular fxa-generation and application
+    # Currently we just check that we get back an assertion we trust. And use email from there.
+    # But we don't do any further check. Given that we only run Sync that's probably OK.
+    @decorator
+    def _browserid_required(f, request, *args, **kwargs):
+        v = request.browserid_verification
+        if v is None:
+            # noinspection PyTypeChecker
+            return response_error(
+                _("BrowserID authentication required for this request."),
+                code=401, errno=109,
+                error=_("Authentication required"),
+                response_class=HttpResponseNotAuthorized, **error_options)
+        elif v.get("status", None) != "okay":
+            # noinspection PyTypeChecker
+            return response_error(
+                _("BrowserID authentication failed for this request."),
+                code=401, errno=110,
+                error=_("Authentication failed"),
+                response_class=HttpResponseNotAuthorized, **error_options)
+        try:
+            request.browserid_user = User.objects.get(email=v["email"])
+        except (User.DoesNotExist, User.MultipleObjectsReturned):
+            # noinspection PyTypeChecker
+            return response_error(
+                _("Cannot find user matching provided BrowserID authentication. Sorry."),
+                code=500, errno=999,
+                error=_("Authentication failed"),
+                response_class=HttpResponseServerError)
+        return f(request, *args, **kwargs)
+    return _browserid_required
 
 
 @csrf_exempt
@@ -197,14 +232,25 @@ def session_destroy(request):
 
 
 @csrf_exempt
+@browserid_required(timestamp_header="X-Timestamp")
 def token_sync(request):
+    uid = request.browserid_user.username
+    token = Token.issue("x-sync-token", request.browserid_user)
+    logger.debug("Issued sync token: " + repr(token))
+    # Mozilla services use tokenlib here and encode everything in token ID.
+    # We don't want two different middlewares handling this mess, so assuming
+    # the fact we're running both Janus and Mnemosyne in the same system,
+    # sharing Janus Tokens, we just generate one.
+    # The tricky (and possibly fragile) part is that "key" must be passed RAW,
+    # not base64- or hex-encoded, or the validation will fail.
     return response_json({
-        "id": "badid",
-        "key": "badkey",
-        "uid": 12345,
+        "id": token.token_id,
+        "key": binascii.a2b_hex(token.expand().hmac_key).decode("latin-1"),
+        "uid": uid,
         "api_endpoint": "https://localhost:8000/sync/1.5/",
         "duration": 3600,
-    })
+        "hashalg": "sha256"
+    }, timestamp_header="X-Timestamp", timestamp_on=[200, 401])
 
 
 @csrf_exempt

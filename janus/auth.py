@@ -115,7 +115,6 @@ class HawkAuthenticationMiddleware(object):
 class BrowserIDAuthenticationMiddleware(object):
     @staticmethod
     def process_request(request):
-        authorization = None
         try:
             if "HTTP_AUTHORIZATION" not in request.META:
                 raise KeyError("No HTTP_AUTHORIZATION")  # Fail before the breakpoint
@@ -127,12 +126,11 @@ class BrowserIDAuthenticationMiddleware(object):
             assert authorization[0].lower() == "browserid"
             authorization = authorization[1]
             verifier = BrowserIDLocalVerifier()
-            print("BrowserIDAuthMW: Verified: %s" % repr(verifier.verify(authorization)))
-        except KeyError:
-            pass
-        except Exception as e:
-            print("BrowserIDAuthMW: Exception: %s" % repr(e))
-            print("BrowserIDAuthMW: Authorization was: %s" % repr(authorization))
+            request.browserid_verification = verifier.verify(authorization)
+        except (KeyError, browserid.Error) as e:
+            if not isinstance(e, KeyError):
+                logger.exception("Failed to verify BrowserID assertion: %s", repr(e))
+            request.browserid_verification = None
 
 
 class BrowserIDLocalTrustSupport(object):
