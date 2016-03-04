@@ -9,6 +9,7 @@ from decorator import decorator
 from django.db import transaction
 from django.http.response import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404
+from django.utils.timezone import UTC
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 
@@ -62,16 +63,67 @@ def info_collection_usage(request):
     })
 
 
+def _put_bso(collection, bsoid, data):
+    try:
+        bso = StorageObject.objects.get(collection=collection, bsoid=bsoid)
+        bso.update_from_dict(data)
+        bso.save()
+    except StorageObject.DoesNotExist:
+        expires = None if "ttl" not in data else timezone.now() + datetime.timedelta(seconds=data["ttl"])
+        bso = StorageObject.objects.create(collection=collection, bsoid=bsoid,
+                                           payload=data.get("payload", None),
+                                           sortindex=data.get("sortindex", None),
+                                           expires=expires)
+    return bso
+
+
 @csrf_exempt
 @transaction.atomic
 @token_required("x-sync-token")
 def storage_collection(request, collection_name):
     user = request.hawk_token.user
-    collection = get_object_or_404(Collection, user=user, name=collection_name)
+
+    if request.method == "POST":
+        data = json.loads(request.body)
+        collection, _created = Collection.objects.get_or_create(user=user, name=collection_name)
+        bsoids = set()
+        bso = None
+        for item in data:
+            bso = _put_bso(collection, item["id"], item)
+            bsoids.add(bso.id)
+        return response_json({
+            "modified": bso.modified_ts if bso is not None else None,
+            "success": list(bsoids),
+            "failed": {}   # TODO: We really never fail?
+        })
+    else:
+        collection = get_object_or_404(Collection, user=user, name=collection_name)
 
     if request.method == "DELETE":
         collection.delete()
         return response_json({})
+    elif request.method == "GET":
+        bso_qs = collection.storageobject_set.all()
+
+        sort_by = request.GET.get("sort", None)
+        if sort_by == "newest":
+            bso_qs = bso_qs.order_by("-modified")
+        elif sort_by == "oldest":
+            bso_qs = bso_qs.order_by("modified")
+        else:  # "index" or not specified
+            bso_qs = bso_qs.order_by("-sortindex")
+
+        if "newer" in request.GET:
+            newer_than = datetime.datetime.fromtimestamp(int(request.GET["newer"]), UTC)
+            bso_qs = bso_qs.filter(modified__gt=newer_than)
+
+        # TODO: Implement limit and offset support for collections
+
+        if "full" not in request.GET:
+            result = bso_qs.values_list("id", flat=True)
+        else:
+            result = [bso.as_dict() for bso in bso_qs]
+        return response_json(result)
 
     raise RuntimeError("Sorry, not implemented yet") # TODO: FIXME: Implement this
 
@@ -90,16 +142,7 @@ def storage_object(request, collection_name, bsoid):
         # TODO: This request may include the X-If-Unmodified-Since header to avoid overwriting the data
         data = json.loads(request.body)
         collection, _created = Collection.objects.get_or_create(user=user, name=collection_name)
-        try:
-            bso = StorageObject.objects.get(collection=collection, bsoid=bsoid)
-            bso.update_from_dict(data)
-            bso.save()
-        except StorageObject.DoesNotExist:
-            expires = None if "ttl" not in data else timezone.now() + datetime.timedelta(seconds=data["ttl"])
-            bso = StorageObject.objects.create(collection=collection, bsoid=bsoid,
-                                               payload=data.get("payload", None),
-                                               sortindex=data.get("sortindex", None),
-                                               expires=expires)
+        bso = _put_bso(collection, bsoid, data)
         return response_json(bso.modified_ts)
     elif request.method == "DELETE":
         collection = get_object_or_404(Collection, user=user, name=collection_name)
