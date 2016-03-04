@@ -76,6 +76,7 @@ def _lookup_token(sender_id):
 class HawkAuthenticationMiddleware(object):
     @staticmethod
     def process_request(request):
+        uri = "(unknown)"
         try:
             if "HTTP_AUTHORIZATION" not in request.META:
                 raise KeyError("No HTTP_AUTHORIZATION")  # Fail before the breakpoint
@@ -108,7 +109,7 @@ class HawkAuthenticationMiddleware(object):
             request.user = request.hawk_token.user
         except (mohawk.exc.HawkFail, KeyError) as e:
             if not isinstance(e, KeyError):
-                logger.error("HAWK request failed: %s", repr(e))
+                logger.error("HAWK request failed for %s %s: %s", request.method, uri, repr(e))
             request.hawk_auth_receiver = None
             request.hawk_token = None
             request.user = None
