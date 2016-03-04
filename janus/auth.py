@@ -3,7 +3,6 @@ from django.conf import settings
 from django.contrib.auth.hashers import BasePasswordHasher, mask_hash
 from django.utils.crypto import pbkdf2, constant_time_compare
 from django.utils.translation import ugettext_lazy as _
-from django.utils.datastructures import SortedDict
 from janus.hkdf import Hkdf
 from janus.models import Token
 import mohawk
@@ -12,6 +11,9 @@ import browserid
 import hashlib
 import base64
 import binascii
+import os
+import os.path
+import collections
 import logging
 
 
@@ -49,7 +51,7 @@ class MozillaOnePWHasher(BasePasswordHasher):
     def safe_summary(self, encoded):
         algorithm, iterations, salt, p_hash = encoded.split("$", 3)
         assert algorithm == self.algorithm
-        return SortedDict([
+        return collections.OrderedDict([
             (_('algorithm'), self.algorithm),
             (_('iterations'), iterations),
             (_('salt'), mask_hash(salt, show=2)),
@@ -165,6 +167,18 @@ def get_browserid_key():
     from Crypto.PublicKey import RSA
     from jwkest.jwk import RSAKey
     if _RSAKEY is None:
-        _RSAKEY = RSA.generate(1024)  # Totally insecure!
-        logger.info("Generated RSA keypair")
+        try:
+            if os.path.exists(settings.BROWSERID_KEY_FILE):
+                with open(settings.BROWSERID_KEY_FILE, "r") as f:
+                    _RSAKEY = RSA.importKey(f.read())
+                logger.info("Loaded RSA keypair from %s", settings.BROWSERID_KEY_FILE)
+        except BaseException as e:
+            logger.exception("Error loading existing RSA keypair: %s", repr(e))
+            _RSAKEY = None
+        if _RSAKEY is None:
+            _RSAKEY = RSA.generate(1024)  # TODO: FIXME: Totally insecure!
+            logger.warning("Generated RSA keypair. The key is WEAK and INSECURE, use for testing only.")
+            with open(settings.BROWSERID_KEY_FILE, "w") as f:
+                f.write(_RSAKEY.exportKey("PEM"))
+            logger.info("Saved RSA keypair to %s", settings.BROWSERID_KEY_FILE)
     return RSAKey(kid=b"rsa1", key=_RSAKEY)  # It's important that kid is a byte string, not unicode

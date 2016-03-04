@@ -63,6 +63,9 @@ SECRET_KEY = 'c&31d@v79hj646q(8quvvu0xju6gqa)zlbrf5&_i!^rcrl5=fz'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
+# SECURITY WARNING: keep this file private and unreadable to others
+BROWSERID_KEY_FILE = os.path.join(BASE_DIR, "browserid.pem")
+
 TEMPLATE_DEBUG = True
 
 ALLOWED_HOSTS = []
@@ -94,7 +97,7 @@ MIDDLEWARE_CLASSES = (
 )
 
 AUTH_USER_MODEL = 'janus.User'
-PASSWORD_HASHERS = ('janus.auth.MozillaOnePWHasher',) + global_settings.PASSWORD_HASHERS
+PASSWORD_HASHERS = ['janus.auth.MozillaOnePWHasher'] + list(global_settings.PASSWORD_HASHERS)
 
 ROOT_URLCONF = 'firesync.urls'
 
