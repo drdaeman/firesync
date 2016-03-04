@@ -12,7 +12,7 @@ class Collection(models.Model):
 
     @property
     def modified_ts(self):
-        return time.mktime(self.modified.timetuple())
+        return int(time.mktime(self.modified.timetuple()))
 
     class Meta:
         unique_together = [("user", "name")]
