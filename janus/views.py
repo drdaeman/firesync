@@ -1,13 +1,18 @@
 from __future__ import unicode_literals, absolute_import
+
+from django.core.signing import TimestampSigner, BadSignature
+from django.core.urlresolvers import reverse
 from django.http.response import HttpResponse, HttpResponseBadRequest, HttpResponseServerError
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 from django.utils.crypto import constant_time_compare
+from django.utils.encoding import force_text
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.translation import ugettext as _
 from decorator import decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from jwkest.jws import JWS
-from .auth import MozillaOnePWHasher, get_browserid_key
+from .auth import MozillaOnePWHasher, get_browserid_key, BrowserIDLocalVerifier
 from janus.hkdf import Hkdf
 from janus.models import Keys
 from .models import User, Token
@@ -80,6 +85,7 @@ def browserid_required(**error_options):
     def _browserid_required(f, request, *args, **kwargs):
         v = request.browserid_verification
         if v is None:
+            logger.error("browserid_required: No BrowserID assertion provided")
             # noinspection PyTypeChecker
             return response_error(
                 _("BrowserID authentication required for this request."),
@@ -87,6 +93,7 @@ def browserid_required(**error_options):
                 error=_("Authentication required"),
                 response_class=HttpResponseNotAuthorized, **error_options)
         elif v.get("status", None) != "okay":
+            logger.error("browserid_required: Error verifying BrowserID assertion: %s", v.get("status", None))
             # noinspection PyTypeChecker
             return response_error(
                 _("BrowserID authentication failed for this request."),
@@ -96,12 +103,14 @@ def browserid_required(**error_options):
         try:
             request.browserid_user = User.objects.get(email=v["email"])
         except (User.DoesNotExist, User.MultipleObjectsReturned):
+            logger.error("browserid_required: Cannot find user for BrowserID assertion with email %s", v["email"])
             # noinspection PyTypeChecker
             return response_error(
                 _("Cannot find user matching provided BrowserID authentication. Sorry."),
                 code=500, errno=999,
                 error=_("Authentication failed"),
                 response_class=HttpResponseServerError)
+        logger.debug("browserid_required: Got a valid BrowserID assertion for %s", request.browserid_user.email)
         return f(request, *args, **kwargs)
     return _browserid_required
 
@@ -245,9 +254,9 @@ def token_sync(request):
     # not base64- or hex-encoded, or the validation will fail.
     return response_json({
         "id": token.token_id,
-        "key": binascii.a2b_hex(token.expand().hmac_key).decode("latin-1"),
+        "key": force_text(binascii.a2b_hex(token.expand().hmac_key), encoding="latin-1"),
         "uid": uid,
-        "api_endpoint": "https://localhost:8000/sync/1.5/",
+        "api_endpoint": "https://localhost:8000/sync/1.5/",  # TODO: FIXME: Hardcoded hostname
         "duration": 3600,
         "hashalg": "sha256"
     }, timestamp_header="X-Timestamp", timestamp_on=[200, 401])
@@ -261,3 +270,59 @@ def page_signup(request):
 @csrf_exempt
 def page_signin(request):
     return render(request, "signin.html", {})
+
+
+@csrf_exempt
+@require_POST
+def oauth_authorization(request):
+    # Here goes the THIRD protocol Mozilla uses for authorization - OAuth.
+    # Because I want to save myself from the pains of implementing it, I'm doing the least necessary.
+    # I'm using the fact OAuth tokens are opaque, and just throwing in some django.core.signing stuff.
+    # That is, the tokens are not something random that's kept in the database, but just signed email
+    # addresses with timestamps. The downside, there's no revocation. But, meh, currently I don't care
+    # about securing the profile data, given that there isn't anything really private there, yet.
+    # Sorry if you feel differently about this.
+    data = json.loads(request.body)
+
+    # Currently, ONLY "profile" scope is supported, only with "token" response type.
+    # That's what my Firefox seem to request (as usually, totally undocumented,
+    # the fxa-oauth-server documentation only mention "code" flow), so that's all that's supported.
+    assert data["scope"] == "profile"
+    assert data["response_type"] == "token"
+
+    verification = BrowserIDLocalVerifier().verify(data["assertion"],
+                                                   audience=["https://localhost:8000/oauth/v1"])
+    if verification["status"] != "okay":
+        return response_json({"error": "Not authorized"}, response_class=HttpResponseNotAuthorized)
+    logger.debug("profile_authorization: BrowserID assertion verified: %s", repr(verification))
+
+    return response_json({
+        "access_token": urlsafe_base64_encode(TimestampSigner(salt="oauth:token:profile").sign(verification["email"])),
+        "scope": "profile",
+        "token_type": "bearer",
+        "expires_in": 3600,
+        "auth_at": int(time.time()),
+    })
+
+
+@csrf_exempt
+def profile_profile(request):
+    try:
+        token = request.META.get("HTTP_AUTHORIZATION", "").split(None, 1)
+        logger.debug("profile: authorization token %s", repr(token))
+        if len(token) == 2 and token[0].lower() == "bearer":
+            token = urlsafe_base64_decode(token[1])
+            logger.debug("profile: decoded token %s", repr(token))
+            email = TimestampSigner(salt="oauth:token:profile").unsign(token, max_age=3600)
+        else:
+            raise KeyError("Unacceptable or missing 'Authorization' header")
+    except (KeyError, BadSignature):
+        return response_json({"error": "Missing, invalid or expired OAuth token."},
+                             response_class=HttpResponseNotAuthorized)
+
+    user = get_object_or_404(User, email=email)
+    return response_json({
+        "uid": user.username,
+        "email": user.email,
+        "avatar": "http://lorempixel.com/128/128/",  # TODO: Don't use external resource here
+    })
