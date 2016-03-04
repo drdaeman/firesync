@@ -31,7 +31,7 @@ class StorageObject(models.Model):
 
     @property
     def modified_ts(self):
-        return time.mktime(self.modified.timetuple())
+        return int(time.mktime(self.modified.timetuple()))
 
     def as_dict(self):
         return {
