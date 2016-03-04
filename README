@@ -52,12 +52,22 @@ What (hopefully) works
   services, but it issues tokens that are understood by our
   Sync service and that should be enough, at least for starters.
   
-- Some parts of Sync service are here. But it's not yet complete.
+- Some parts of Sync service are here. But it's not yet complete,
+  at least I wasn't able to make two Firefox instances sync with
+  each other.
+
+- Profiles return username, email address and a random picture
+  (from lorempixel.com). This uses very primitive OAuth2 token
+  server implementation that's not suitable for storing any
+  really private data. So, be sure to read the source code
+  about the limitations.
 
 What doesn't (TODO)
 -------------------
 
-- Profiles are not implemented.
+- Sync still doesn't work.
+
+- Profile editing is not implemented.
 
 - Signing up. Currently you have to use Django admin
   (or `createsuperuser` command) for this.
