@@ -90,7 +90,7 @@ def storage_collection(request, collection_name):
         bso = None
         for item in data:
             bso = _put_bso(collection, item["id"], item)
-            bsoids.add(bso.id)
+            bsoids.add(bso.bsoid)
         return response_json({
             "modified": bso.modified_ts if bso is not None else None,
             "success": list(bsoids),
@@ -114,13 +114,13 @@ def storage_collection(request, collection_name):
             bso_qs = bso_qs.order_by("-sortindex")
 
         if "newer" in request.GET:
-            newer_than = datetime.datetime.fromtimestamp(int(request.GET["newer"]), UTC)
+            newer_than = datetime.datetime.fromtimestamp(int(request.GET["newer"]), UTC())
             bso_qs = bso_qs.filter(modified__gt=newer_than)
 
         # TODO: Implement limit and offset support for collections
 
         if "full" not in request.GET:
-            result = bso_qs.values_list("id", flat=True)
+            result = bso_qs.values_list("bsoid", flat=True)
         else:
             result = [bso.as_dict() for bso in bso_qs]
         return response_json(result)

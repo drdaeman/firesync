@@ -178,5 +178,10 @@ LOGGING = {
             'level': 'DEBUG',
             'propagate': True,
         },
+        'mnemosyne': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
     },
 }
