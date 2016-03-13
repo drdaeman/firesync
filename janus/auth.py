@@ -83,7 +83,14 @@ class HawkAuthenticationMiddleware(object):
             authorization = request.META["HTTP_AUTHORIZATION"]
             if not authorization.lower().startswith("hawk "):
                 raise KeyError("Not a HAWK authorization")
-            uri = request.build_absolute_uri()
+            # We have to do this manually, because HttpRequest.build_absolute_uri() and
+            # HttpRequest.get_full_path() would return us a forcibly-escaped pathes
+            # (they all unconditionally pass data through uri_to_iri), and we need
+            # everything exactly as we got from the network here.
+            uri = '%s://%s%s%s' % (
+                request.scheme, request.get_host(), request.path,
+                ("?" + request.META.get("QUERY_STRING", "")) if request.META.get("QUERY_STRING", "") else ""
+            )
             if settings.DEBUG and uri.startswith("http://"):
                 # Hax since stunnel doesn't add any headers for us.
                 uri = "https://" + uri[7:]
