@@ -83,19 +83,39 @@ def _put_bso(collection, bsoid, data):
 def storage_collection(request, collection_name):
     user = request.hawk_token.user
 
-    if request.method == "POST":
-        data = json.loads(request.body)
+    if request.method == "POST" or (request.method == "DELETE" and "ids" in request.GET):
         collection, _created = Collection.objects.get_or_create(user=user, name=collection_name)
         bsoids = set()
-        bso = None
-        for item in data:
-            bso = _put_bso(collection, item["id"], item)
-            bsoids.add(bso.bsoid)
-        return response_json({
-            "modified": bso.modified_ts if bso is not None else None,
-            "success": list(bsoids),
-            "failed": {}   # TODO: We really never fail?
-        })
+
+        if request.method == "POST":
+            data = json.loads(request.body)
+            bso = None
+            for item in data:
+                bso = _put_bso(collection, item["id"], item)
+                bsoids.add(bso.bsoid)
+            return response_json({
+                "modified": bso.modified_ts if bso is not None else None,
+                "success": list(bsoids),
+                "failed": {}   # TODO: We really never fail?
+            })
+        elif request.method == "DELETE" and "ids" in request.GET:
+            for bsoid in request.GET.getlist("ids"):
+                try:
+                    bso = StorageObject.objects.get(collection=collection, bsoid=bsoid)
+                    bsoids.add(bso.bsoid)
+                    bso.delete()
+                except StorageObject.DoesNotExist:
+                    pass
+                if bsoids:
+                    # We had deleted something - touch the collection's last modification date
+                    collection.modified = timezone.now()
+                    collection.save()
+            return response_json({
+                "modified": collection.modified_ts
+            })
+        else:
+            # Should never happen, unless parent "if" and this "if" are not in sync.
+            raise RuntimeError("Something went wrong. The code hadn't covered this %s request" % request.method)
     else:
         collection = get_object_or_404(Collection, user=user, name=collection_name)
 
