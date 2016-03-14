@@ -33,7 +33,7 @@ class HttpResponseNotAuthorized(HttpResponse):
 
 
 def xor_bytes(a, b):
-    assert len(a) == len(b)
+    assert len(a) == len(b), "xor_bytes: lengths differ: %d vs %d" % (len(a), len(b))
     return bytes(bytearray(map(lambda pair: pair[0] ^ pair[1], zip(six.iterbytes(a), six.iterbytes(b)))))
 
 
