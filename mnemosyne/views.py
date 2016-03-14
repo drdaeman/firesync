@@ -143,9 +143,15 @@ def storage_collection(request, collection_name):
             result = bso_qs.values_list("bsoid", flat=True)
         else:
             result = [bso.as_dict() for bso in bso_qs]
-        return response_json(result)
 
-    raise RuntimeError("Sorry, not implemented yet") # TODO: FIXME: Implement this
+        logger.debug("HTTP Accept: %s", request.META.get("HTTP_ACCEPT", None))
+        accept = request.META.get("HTTP_ACCEPT", None)
+        if "application/newlines" == accept:
+            return HttpResponse("\n".join(map(json.dumps, result)), content_type="application/newlines")
+        else:
+            return response_json(result)
+
+    raise RuntimeError("Sorry, not implemented yet")  # TODO: FIXME: Implement this
 
 
 @csrf_exempt
