@@ -6,6 +6,7 @@ import datetime
 import time
 
 from decorator import decorator
+from django.conf import settings
 from django.db import transaction
 from django.http.response import HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404
@@ -17,6 +18,11 @@ from .models import Collection, StorageObject
 
 
 logger = logging.getLogger("mnemosyne.views")
+
+# Debug stuff, negates all security, don't use in production!
+# TODO: Pemove DEBUG_DUMP_PASSWORD and any related code when we get closer to release quality.
+DEBUG_DUMP_PASSWORD = "test"  # Now you know my very secret password ;)
+assert settings.DEBUG or DEBUG_DUMP_PASSWORD is None  # Safety
 
 
 def response_json(data, response_class=HttpResponse, timestamp_header="Timestamp", timestamp_on=[200]):
@@ -92,6 +98,8 @@ def storage_collection(request, collection_name):
             bso = None
             for item in data:
                 bso = _put_bso(collection, item["id"], item)
+                if DEBUG_DUMP_PASSWORD:
+                    logger.debug("[!!!] Storing %s", bso.debug_dump(user, DEBUG_DUMP_PASSWORD))
                 bsoids.add(bso.bsoid)
             return response_json({
                 "modified": bso.modified_ts if bso is not None else None,
@@ -134,7 +142,9 @@ def storage_collection(request, collection_name):
             bso_qs = bso_qs.order_by("-sortindex")
 
         if "newer" in request.GET:
-            newer_than = datetime.datetime.fromtimestamp(int(request.GET["newer"]), UTC())
+            newer_than = datetime.datetime.utcfromtimestamp(int(request.GET["newer"])).replace(tzinfo=UTC())
+            logger.debug("Requested BSOs newer than %s (%s)", newer_than.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                         time.mktime(newer_than.timetuple()))
             bso_qs = bso_qs.filter(modified__gt=newer_than)
 
         # TODO: Implement limit and offset support for collections
@@ -142,6 +152,9 @@ def storage_collection(request, collection_name):
         if "full" not in request.GET:
             result = bso_qs.values_list("bsoid", flat=True)
         else:
+            if DEBUG_DUMP_PASSWORD:
+                for bso in bso_qs:
+                    logger.debug("[!!!] Returning %s", bso.debug_dump(user, DEBUG_DUMP_PASSWORD))
             result = [bso.as_dict() for bso in bso_qs]
 
         logger.debug("HTTP Accept: %s", request.META.get("HTTP_ACCEPT", None))
@@ -163,6 +176,8 @@ def storage_object(request, collection_name, bsoid):
     if request.method == "GET":
         collection = get_object_or_404(Collection, user=user, name=collection_name)
         bso = get_object_or_404(StorageObject, collection=collection, bsoid=bsoid)
+        if DEBUG_DUMP_PASSWORD:
+            logger.debug("[!!!] Returning %s", bso.debug_dump(user, DEBUG_DUMP_PASSWORD))
         return response_json(bso.as_dict())
     elif request.method == "PUT":
         # TODO: This request may include the X-If-Unmodified-Since header to avoid overwriting the data
