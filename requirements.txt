@@ -5,3 +5,4 @@ mohawk
 pyjwkest
 pybrowserid
 m2crypto
+django-cors-headers
