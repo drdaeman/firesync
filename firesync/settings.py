@@ -51,22 +51,41 @@ def _lock_down_insecure_crypto():
 _lock_down_insecure_crypto()
 
 
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))   # Project's base directory
+DATA_DIR = os.environ.get("DATA_DIR", BASE_DIR)         # Storage directory
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/1.6/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'c&31d@v79hj646q(8quvvu0xju6gqa)zlbrf5&_i!^rcrl5=fz'
+SECRET_KEY_FILE = os.path.join(DATA_DIR, "secret-key.dat")
+try:
+    fh = os.open(SECRET_KEY_FILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 384)  # 384 = 0o600
+except OSError as e:
+    import errno
+    if e.errno == errno.EEXIST:
+        with open(SECRET_KEY_FILE, "r") as f:
+            SECRET_KEY = f.read()
+    else:
+        raise
+else:
+    import random, string
+    SECRET_KEY = "".join([
+        random.SystemRandom().choice(
+            string.ascii_letters + string.digits + string.punctuation
+        ) for i in range(48)
+    ])
+    with os.fdopen(fh, "w") as f:
+        f.write(SECRET_KEY)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get("DEBUG", "").lower() in ("1", "y", "yes", "true", "t", "on")
 
 # SECURITY WARNING: keep this file private and unreadable to others
-BROWSERID_KEY_FILE = os.path.join(BASE_DIR, "browserid.pem")
+BROWSERID_KEY_FILE = os.path.join(DATA_DIR, "browserid.pem")
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = list(filter(None, os.environ.get("ALLOWED_HOSTS", "").split()))
 
 
 # Application definition
@@ -112,7 +131,7 @@ WSGI_APPLICATION = 'firesync.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        'NAME': os.path.join(DATA_DIR, 'db.sqlite3'),
     }
 }
 
@@ -133,6 +152,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/1.6/howto/static-files/
 
+STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 STATIC_URL = '/static/'
 
 TEMPLATES = [
@@ -179,12 +199,12 @@ LOGGING = {
     'loggers': {
         'janus': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': True,
         },
         'mnemosyne': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': True,
         },
     },

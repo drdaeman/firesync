@@ -21,7 +21,7 @@ logger = logging.getLogger("mnemosyne.views")
 
 # Debug stuff, negates all security, don't use in production!
 # TODO: Pemove DEBUG_DUMP_PASSWORD and any related code when we get closer to release quality.
-DEBUG_DUMP_PASSWORD = "test"  # Now you know my very secret password ;)
+DEBUG_DUMP_PASSWORD = None
 assert settings.DEBUG or DEBUG_DUMP_PASSWORD is None  # Safety
 
 
