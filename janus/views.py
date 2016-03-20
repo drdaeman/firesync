@@ -8,6 +8,7 @@ from django.utils.crypto import constant_time_compare
 from django.utils.encoding import force_text
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.utils.translation import ugettext as _
+from django.conf import settings
 from decorator import decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
@@ -220,7 +221,7 @@ def certificate_sign(request):
         "principal": {
             "email": user.email,
         },
-        "iss": "localhost:8000",
+        "iss": settings.BROWSERID_ISSUER,
         "iat": now - (10 * 1000),
         "exp": now + data["duration"],
         "fxa-generation": 0,
@@ -252,11 +253,12 @@ def token_sync(request):
     # sharing Janus Tokens, we just generate one.
     # The tricky (and possibly fragile) part is that "key" must be passed RAW,
     # not base64- or hex-encoded, or the validation will fail.
+    sync_api_uri = '%s://%s%s' % (request.scheme, request.get_host(), "/sync/1.5/")
     return response_json({
         "id": token.token_id,
         "key": force_text(binascii.a2b_hex(token.expand().hmac_key), encoding="latin-1"),
         "uid": uid,
-        "api_endpoint": "https://localhost:8000/sync/1.5/",  # TODO: FIXME: Hardcoded hostname
+        "api_endpoint": sync_api_uri,
         "duration": 3600,
         "hashalg": "sha256"
     }, timestamp_header="X-Timestamp", timestamp_on=[200, 401])
@@ -290,8 +292,9 @@ def oauth_authorization(request):
     assert data["scope"] == "profile"
     assert data["response_type"] == "token"
 
+    request_uri = '%s://%s%s' % (request.scheme, request.get_host(), request.path)
     verification = BrowserIDLocalVerifier().verify(data["assertion"],
-                                                   audience=["https://localhost:8000/oauth/v1"])
+                                                   audience=[request_uri])
     if verification["status"] != "okay":
         return response_json({"error": "Not authorized"}, response_class=HttpResponseNotAuthorized)
     logger.debug("profile_authorization: BrowserID assertion verified: %s", repr(verification))

@@ -149,7 +149,7 @@ class BrowserIDLocalTrustSupport(object):
         return issuer in trusted_secondaries
 
     def get_key(self, issuer):
-        if issuer == "localhost:8000":
+        if issuer == settings.BROWSERID_ISSUER:
             key = get_browserid_key()
             key = {_k: getattr(key, _k) for _k in list(set(key.public_members) & set(key.longs))}
             if "algorithm" not in key:
@@ -162,8 +162,8 @@ class BrowserIDLocalTrustSupport(object):
 class BrowserIDLocalVerifier(browserid.LocalVerifier):
     def __init__(self, warning=True):
         super(BrowserIDLocalVerifier, self).__init__(
-            audiences=["https://localhost:8000"],
-            trusted_secondaries=["localhost:8000"],
+            audiences=["https://%s" % settings.BROWSERID_ISSUER],
+            trusted_secondaries=[settings.BROWSERID_ISSUER],
             supportdocs=BrowserIDLocalTrustSupport(),
             warning=warning
         )

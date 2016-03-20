@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/1.6/ref/settings/
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 import os
 from django.conf import global_settings
+import email.utils
 
 
 # Lock down insecure pure-Python fallback RSA implementation in PyBrowserID
@@ -82,10 +83,20 @@ else:
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG", "").lower() in ("1", "y", "yes", "true", "t", "on")
 
+# Main hostname. Used as default value for BROWSERID_ISSUER and ALLOWED_HOSTS.
+FIRESYNC_HOSTNAME = os.environ.get("FIRESYNC_HOSTNAME", "localhost:8000")
+
 # SECURITY WARNING: keep this file private and unreadable to others
 BROWSERID_KEY_FILE = os.path.join(DATA_DIR, "browserid.pem")
+BROWSERID_ISSUER = os.environ.get("BROWSERID_ISSUER", FIRESYNC_HOSTNAME)
 
-ALLOWED_HOSTS = list(filter(None, os.environ.get("ALLOWED_HOSTS", "").split()))
+# A list of strings representing the host/domain names that this Django site can serve.
+# Usually you don't need to provide one, but specify FIRESYNC_HOSTNAME instead.
+ALLOWED_HOSTS = list(filter(None, os.environ.get("ALLOWED_HOSTS", FIRESYNC_HOSTNAME).split()))
+
+# A list of all the people who get code error notifications.
+# Specified as "User Name <someone@example.org>, Another Name <someone-else@example.net>".
+ADMINS = list(map(email.utils.parseaddr, filter(None, os.environ.get("ADMINS", "").split(","))))
 
 
 # Application definition
