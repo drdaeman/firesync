@@ -208,7 +208,7 @@ def account_keys(request):
 @hawk_required("sessionToken")
 def certificate_sign(request):
     user = request.hawk_token.user
-    data = json.loads(request.body)
+    data = json.loads(request.body.decode("utf-8"))
     assert "publicKey" in data, "Missing publicKey"  # TODO: Proper validation
     assert "duration" in data, "Missing duration"
     now = int(time.time() * 1000)
@@ -282,7 +282,7 @@ def oauth_authorization(request):
     # addresses with timestamps. The downside, there's no revocation. But, meh, currently I don't care
     # about securing the profile data, given that there isn't anything really private there, yet.
     # Sorry if you feel differently about this.
-    data = json.loads(request.body)
+    data = json.loads(request.body.decode("utf-8"))
 
     # Currently, ONLY "profile" scope is supported, only with "token" response type.
     # That's what my Firefox seem to request (as usually, totally undocumented,

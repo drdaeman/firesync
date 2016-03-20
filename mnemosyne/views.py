@@ -94,7 +94,7 @@ def storage_collection(request, collection_name):
         bsoids = set()
 
         if request.method == "POST":
-            data = json.loads(request.body)
+            data = json.loads(request.body.decode("utf-8"))
             bso = None
             for item in data:
                 bso = _put_bso(collection, item["id"], item)
@@ -181,7 +181,7 @@ def storage_object(request, collection_name, bsoid):
         return response_json(bso.as_dict())
     elif request.method == "PUT":
         # TODO: This request may include the X-If-Unmodified-Since header to avoid overwriting the data
-        data = json.loads(request.body)
+        data = json.loads(request.body.decode("utf-8"))
         collection, _created = Collection.objects.get_or_create(user=user, name=collection_name)
         bso = _put_bso(collection, bsoid, data)
         return response_json(bso.modified_ts)
