@@ -266,7 +266,7 @@ def token_sync(request):
 
 @csrf_exempt
 def page_signup(request):
-    return render(request, "signin.html", {})
+    return render(request, "signup.html", {})
 
 
 @csrf_exempt
