@@ -226,7 +226,7 @@ def certificate_sign(request):
         "fxa-generation": 0,
         "fxa-lastAuthAt": 0,
         "fxa-verifiedEmail": user.email
-    }), alg=b"RS256")  # Beware: if we'd use u"RS256" here, things will go wrong and we'll have {"alg":null}
+    }), alg="RS256")   # NOTE: Needs reasonably recent version of pyjwkest
     cert = jws.sign_compact([key])
 
     return response_json({"cert": cert})

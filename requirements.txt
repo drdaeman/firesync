@@ -2,7 +2,7 @@ django
 django-sslserver
 decorator
 mohawk
-pyjwkest
+pyjwkest>=1.1.7
 pybrowserid
 m2crypto
 django-cors-headers
