@@ -256,7 +256,7 @@ def token_sync(request):
     # not base64- or hex-encoded, or the validation will fail.
     sync_api_uri = '%s://%s%s' % (request.scheme, request.get_host(), "/sync/1.5/")
     return response_json({
-        "id": token.token_id,
+        "id": force_text(token.token_id, encoding="ascii"),
         "key": force_text(binascii.a2b_hex(token.expand().hmac_key), encoding="latin-1"),
         "uid": uid,
         "api_endpoint": sync_api_uri,
@@ -303,8 +303,9 @@ def oauth_authorization(request):
         return response_json({"error": "Not authorized"}, response_class=HttpResponseNotAuthorized)
     logger.debug("profile_authorization: BrowserID assertion verified: %s", repr(verification))
 
+    access_token = TimestampSigner(salt="oauth:token:profile").sign(verification["email"])
     return response_json({
-        "access_token": urlsafe_base64_encode(TimestampSigner(salt="oauth:token:profile").sign(verification["email"])),
+        "access_token": urlsafe_base64_encode(access_token.encode("utf-8")).decode("ascii"),
         "scope": "profile",
         "token_type": "bearer",
         "expires_in": 3600,
