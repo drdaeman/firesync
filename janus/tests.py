@@ -1,8 +1,10 @@
 from __future__ import absolute_import, unicode_literals
 from django.test import TestCase
-from . import auth, hkdf
+from . import auth, hkdf, models
 import binascii
 import base64
+import mohawk
+import json
 
 
 def H(hex_string, encoding=None):
@@ -10,6 +12,20 @@ def H(hex_string, encoding=None):
     if encoding is not None:
         value = value.decode(encoding)
     return value
+
+
+def b64decode(data):
+    """
+    Helper function to decode base64.
+
+    Accepts both standard and "URL-safe" encoded strings
+    and recovers from missing padding (trailing "=" chars).
+    """
+    data = data.replace("-", "+").replace("_", "/")
+    missing_padding = 4 - len(data) % 4
+    if missing_padding:
+        data += "=" * missing_padding
+    return base64.b64decode(data)
 
 
 class KnownVectorsTestCase(TestCase):
@@ -51,3 +67,81 @@ class KnownVectorsTestCase(TestCase):
         ref_authpw_formatted = "%s$%d$%s$%s" % (hasher.algorithm, hasher.iterations, ref_email,
                                                 base64.b64encode(ref_authpw_bare).decode("ascii").strip())
         self.assertEqual(authpw, ref_authpw_formatted, "Invalid authPW")
+
+
+class AccountTest(TestCase):
+    TEST_USER_UID = "test_user"
+    TEST_USER_EMAIL = "nobody@example.org"
+    TEST_USER_PASSWORD = "verysecret"
+
+    def setUp(self):
+        models.User.objects.create_user(self.TEST_USER_UID, self.TEST_USER_EMAIL, self.TEST_USER_PASSWORD)
+
+    def test_signin_page(self):
+        """
+        Tests that sign-in HTML page renders.
+        """
+        response = self.client.get("/signin")
+        self.assertEqual(response.status_code, 200, "Failed to fetch sign-in page")
+
+    def test_login(self):
+        """
+        Tests the login sequence.
+        """
+        # Generate "authPW" value from the plaintext password
+        auth_pw = auth.MozillaOnePWHasher().encode(self.TEST_USER_PASSWORD, self.TEST_USER_EMAIL)
+        auth_pw_prefix = "{0}$1000${1}$".format(auth.MozillaOnePWHasher.algorithm, self.TEST_USER_EMAIL)
+        self.assertTrue(auth_pw.startswith(auth_pw_prefix), "MozillaOnePWHasher returned something weird")
+        auth_pw = auth_pw[len(auth_pw_prefix):]
+
+        # Try to log in
+        login_data = json.dumps({
+            "email": self.TEST_USER_EMAIL,
+            "authPW": auth_pw
+        })
+        response = self.client.post("/v1/account/login?keys=true", data=login_data,
+                                    content_type="application/json")
+        self.assertEqual(response.status_code, 200, "Invalid HTTP status code while logging in")
+
+        # Validate the response. We should've successfully logged in.
+        login_data = response.json()
+        for key in ["uid", "sessionToken", "keyFetchToken", "verified"]:
+            self.assertIn(key, login_data, "Missing response key {}".format(key))
+        self.assertEqual(login_data["uid"], self.TEST_USER_UID, "Logged in as unexpected user")
+        self.assertTrue(login_data["verified"], "User not verified")
+
+        # Our certificate for signing
+        publicKey = "BLAH"  # FIXME
+        login_data = json.dumps({
+            "publicKey": publicKey,
+            "duration": 3600
+        })
+
+        # Send the request to sign our certificate. It's HAWK-authenticated with sessionToken.
+        token = hkdf.Hkdf(b"", H(login_data["sessionToken"])).expand(b"identity.mozilla.com/picl/v1/sessionToken", 64)
+        token = token[0:32], token[32:64]
+        hawk_auth = mohawk.Sender({
+            "id": binascii.b2a_hex(token[0]),
+            "key": token[1],
+            "algorithm": "sha256"
+        }, "http://testserver/v1/certificate/sign", "POST", content=login_data, content_type="application/json")
+        response = self.client.post("/v1/certificate/sign", data=login_data, content_type="application/json",
+                                    HTTP_AUTHORIZATION=hawk_auth.request_header)
+        self.assertEqual(response.status_code, 200, "Invalid HTTP status code while signing certificate")
+
+        # Validate the certificate signing response.
+        cert_data = response.json()
+        self.assertIn("cert", cert_data, "No certificate data in response")
+        cert_data = cert_data["cert"]
+        self.assertTrue(cert_data != "", "Empty certificate data")
+
+        # Parse and validate the returned signature
+        jws = list(map(b64decode, cert_data.split(".")))
+        self.assertEqual(len(jws), 3, "Returned JWS looks invalid")
+        jws[0] = json.loads(jws[0])
+        self.assertEqual(jws[0]["alg"], "RS256", "JWS is not RSA-signed. Either we had implemented ECDSA"
+                                                 " or something went wrong.")
+        jws[1] = json.loads(jws[1])
+        self.assertEqual(jws[1]["fxa-verifiedEmail"], self.TEST_USER_EMAIL, "JWS: Mismatching fxa-verifiedEmail")
+        self.assertEqual(jws[1]["principal"]["email"], self.TEST_USER_EMAIL, "JWS: Mismatching principal.email")
+        self.assertEqual(jws[1]["public-key"], publicKey, "JWS: Mismatching public-key")
