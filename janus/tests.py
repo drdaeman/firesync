@@ -95,11 +95,11 @@ class AccountTest(TestCase):
         auth_pw = auth_pw[len(auth_pw_prefix):]
 
         # Try to log in
-        login_data = json.dumps({
+        credentials = json.dumps({
             "email": self.TEST_USER_EMAIL,
             "authPW": auth_pw
         })
-        response = self.client.post("/v1/account/login?keys=true", data=login_data,
+        response = self.client.post("/v1/account/login?keys=true", data=credentials,
                                     content_type="application/json")
         self.assertEqual(response.status_code, 200, "Invalid HTTP status code while logging in")
 
@@ -111,9 +111,9 @@ class AccountTest(TestCase):
         self.assertTrue(login_data["verified"], "User not verified")
 
         # Our certificate for signing
-        publicKey = "BLAH"  # FIXME
-        login_data = json.dumps({
-            "publicKey": publicKey,
+        public_key = "BLAH"  # FIXME
+        key_data = json.dumps({
+            "publicKey": public_key,
             "duration": 3600
         })
 
@@ -124,8 +124,8 @@ class AccountTest(TestCase):
             "id": binascii.b2a_hex(token[0]),
             "key": token[1],
             "algorithm": "sha256"
-        }, "http://testserver/v1/certificate/sign", "POST", content=login_data, content_type="application/json")
-        response = self.client.post("/v1/certificate/sign", data=login_data, content_type="application/json",
+        }, "http://testserver/v1/certificate/sign", "POST", content=key_data, content_type="application/json")
+        response = self.client.post("/v1/certificate/sign", data=key_data, content_type="application/json",
                                     HTTP_AUTHORIZATION=hawk_auth.request_header)
         self.assertEqual(response.status_code, 200, "Invalid HTTP status code while signing certificate")
 
@@ -144,4 +144,4 @@ class AccountTest(TestCase):
         jws[1] = json.loads(jws[1])
         self.assertEqual(jws[1]["fxa-verifiedEmail"], self.TEST_USER_EMAIL, "JWS: Mismatching fxa-verifiedEmail")
         self.assertEqual(jws[1]["principal"]["email"], self.TEST_USER_EMAIL, "JWS: Mismatching principal.email")
-        self.assertEqual(jws[1]["public-key"], publicKey, "JWS: Mismatching public-key")
+        self.assertEqual(jws[1]["public-key"], public_key, "JWS: Mismatching public-key")
