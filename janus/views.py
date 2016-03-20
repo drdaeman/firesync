@@ -1,5 +1,6 @@
 from __future__ import unicode_literals, absolute_import
 
+import browserid
 from django.core.signing import TimestampSigner, BadSignature
 from django.core.urlresolvers import reverse
 from django.http.response import HttpResponse, HttpResponseBadRequest, HttpResponseServerError
@@ -292,10 +293,13 @@ def oauth_authorization(request):
     assert data["scope"] == "profile"
     assert data["response_type"] == "token"
 
-    request_uri = '%s://%s%s' % (request.scheme, request.get_host(), request.path)
-    verification = BrowserIDLocalVerifier().verify(data["assertion"],
-                                                   audience=[request_uri])
+    audience = ["%s/oauth/v1" % request.get_host()]
+    try:
+        verification = BrowserIDLocalVerifier().verify(data["assertion"], audience=audience)
+    except browserid.AudienceMismatchError:
+        verification = {"status": "error", "_error": "Audience mismatch"}
     if verification["status"] != "okay":
+        logger.error("profile_authorization: BrowserID assertion verification failed: %s", repr(verification))
         return response_json({"error": "Not authorized"}, response_class=HttpResponseNotAuthorized)
     logger.debug("profile_authorization: BrowserID assertion verified: %s", repr(verification))
 
