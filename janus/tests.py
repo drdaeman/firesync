@@ -14,7 +14,7 @@ def H(hex_string, encoding=None):
     return value
 
 
-def b64decode(data):
+def b64decode(data, encoding=None):
     """
     Helper function to decode base64.
 
@@ -25,7 +25,10 @@ def b64decode(data):
     missing_padding = 4 - len(data) % 4
     if missing_padding:
         data += "=" * missing_padding
-    return base64.b64decode(data)
+    value = base64.b64decode(data)
+    if encoding is not None:
+        value = value.decode(encoding)
+    return value
 
 
 class KnownVectorsTestCase(TestCase):
@@ -138,10 +141,12 @@ class AccountTest(TestCase):
         # Parse and validate the returned signature
         jws = list(map(b64decode, cert_data.split(".")))
         self.assertEqual(len(jws), 3, "Returned JWS looks invalid")
-        jws[0] = json.loads(jws[0])
+
+        jws[0] = json.loads(jws[0].decode("utf-8"))
         self.assertEqual(jws[0]["alg"], "RS256", "JWS is not RSA-signed. Either we had implemented ECDSA"
                                                  " or something went wrong.")
-        jws[1] = json.loads(jws[1])
+
+        jws[1] = json.loads(jws[1].decode("utf-8"))
         self.assertEqual(jws[1]["fxa-verifiedEmail"], self.TEST_USER_EMAIL, "JWS: Mismatching fxa-verifiedEmail")
         self.assertEqual(jws[1]["principal"]["email"], self.TEST_USER_EMAIL, "JWS: Mismatching principal.email")
         self.assertEqual(jws[1]["public-key"], public_key, "JWS: Mismatching public-key")
