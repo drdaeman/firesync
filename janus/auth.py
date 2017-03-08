@@ -177,7 +177,7 @@ def get_browserid_key():
     if _RSAKEY is None:
         try:
             if os.path.exists(settings.BROWSERID_KEY_FILE):
-                with open(settings.BROWSERID_KEY_FILE, "r") as f:
+                with open(settings.BROWSERID_KEY_FILE, "rb") as f:
                     _RSAKEY = RSA.importKey(f.read())
                 logger.info("Loaded RSA keypair from %s", settings.BROWSERID_KEY_FILE)
         except BaseException as e:
@@ -186,7 +186,7 @@ def get_browserid_key():
         if _RSAKEY is None:
             _RSAKEY = RSA.generate(1024)  # TODO: FIXME: Totally insecure!
             logger.warning("Generated RSA keypair. The key is WEAK and INSECURE, use for testing only.")
-            with open(settings.BROWSERID_KEY_FILE, "w") as f:
+            with open(settings.BROWSERID_KEY_FILE, "wb") as f:
                 f.write(_RSAKEY.exportKey("PEM"))
             logger.info("Saved RSA keypair to %s", settings.BROWSERID_KEY_FILE)
     return RSAKey(kid=b"rsa1", key=_RSAKEY)  # It's important that kid is a byte string, not unicode
