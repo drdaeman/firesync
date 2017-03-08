@@ -3,6 +3,7 @@ from . import views
 
 urlpatterns = [
     url(r"^info/collections$", views.info_collections),
+    url(r"^info/configuration", views.info_configuration),
     url(r"^info/quota$", views.info_quota),
     url(r"^info/collection_usage", views.info_collection_usage),
 

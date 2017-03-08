@@ -8,6 +8,7 @@ import time
 from decorator import decorator
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Count
 from django.http.response import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils.timezone import UTC
@@ -75,9 +76,15 @@ def info_quota(request):
 def info_collection_usage(request):
     user = request.hawk_token.user
     return response_json({
-        collection.name: 0
-        for collection in Collection.objects.filter(user=user)
+        collection.name: collection.bso_count
+        for collection in Collection.objects.filter(user=user).annotate(bso_count=Count("storageobject"))
     })
+
+
+@token_required("x-sync-token")
+def info_configuration(request):
+    # We don't impose any limits at the moment.
+    return response_json({})
 
 
 def _put_bso(collection, bsoid, data):
