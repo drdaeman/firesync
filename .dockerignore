@@ -1,0 +1,10 @@
+.virtualenv
+.vagrant
+.idea
+*.pem
+*.sqlite3
+secret-key.dat
+__pycache__
+*.py[cod]
+Vagrantfile
+.gitlab-ci.yml
