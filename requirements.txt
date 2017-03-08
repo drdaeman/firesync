@@ -4,5 +4,5 @@ decorator
 mohawk
 pyjwkest>=1.1.7
 pybrowserid
-m2crypto
+pycryptodome
 django-cors-headers
