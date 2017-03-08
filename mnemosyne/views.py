@@ -33,6 +33,10 @@ class HttpResponseMethodNotAllowed(HttpResponse):
     status_code = 405
 
 
+class HttpResponsePreconditionFailed(HttpResponse):
+    status_code = 412
+
+
 def response_json(data, response_class=HttpResponse, timestamp_header="Timestamp", timestamp_on=(200,)):
     logger.debug("JSON response: %s", json.dumps(data))
     r = response_class(json.dumps(data), content_type="application/json")
@@ -103,11 +107,17 @@ def storage_collection(request, collection_name):
         if request.method == "POST":
             data = json.loads(request.body.decode("utf-8"))
             bso = None
+            had_updates = False
             for item in data:
                 bso = _put_bso(collection, item["id"], item)
+                had_updates = True
                 if DEBUG_DUMP_PASSWORD:
                     logger.debug("[!!!] Storing %s", bso.debug_dump(user, DEBUG_DUMP_PASSWORD))
                 bsoids.add(bso.bsoid)
+            if had_updates:
+                # We had updated something - touch the collection's last modification date
+                collection.modified = timezone.now()
+                collection.save(update_fields=["modified"])
             return response_json({
                 "modified": bso.modified_ts if bso is not None else None,
                 "success": list(bsoids),
@@ -180,6 +190,10 @@ def storage_collection(request, collection_name):
 def storage_object(request, collection_name, bsoid):
     user = request.hawk_token.user
 
+    if_unmodified_since = request.META.get("HTTP_X_IF_UNMODIFIED_SINCE", None)
+    if if_unmodified_since:
+        if_unmodified_since = datetime.datetime.utcfromtimestamp(int(if_unmodified_since)).replace(tzinfo=UTC())
+
     if request.method == "GET":
         collection = get_object_or_404(Collection, user=user, name=collection_name)
         bso = get_object_or_404(StorageObject, collection=collection, bsoid=bsoid)
@@ -187,13 +201,23 @@ def storage_object(request, collection_name, bsoid):
             logger.debug("[!!!] Returning %s", bso.debug_dump(user, DEBUG_DUMP_PASSWORD))
         return response_json(bso.as_dict())
     elif request.method == "PUT":
-        # TODO: This request may include the X-If-Unmodified-Since header to avoid overwriting the data
+        collection = None
+        if if_unmodified_since:
+            try:
+                collection = Collection.objects.select_for_update().get(user=user, name=collection_name)
+                if collection.modified > if_unmodified_since:
+                    return HttpResponsePreconditionFailed("Collection was modified after X-If-Unmodified-Since")
+            except Collection.DoesNotExist:
+                pass
         data = json.loads(request.body.decode("utf-8"))
-        collection, _created = Collection.objects.get_or_create(user=user, name=collection_name)
+        if collection is None:
+            collection, _created = Collection.objects.get_or_create(user=user, name=collection_name)
         bso = _put_bso(collection, bsoid, data)
         return response_json(bso.modified_ts)
     elif request.method == "DELETE":
-        collection = get_object_or_404(Collection, user=user, name=collection_name)
+        collection = get_object_or_404(Collection.objects.select_for_update(), user=user, name=collection_name)
+        if if_unmodified_since and collection.modified > if_unmodified_since:
+            return HttpResponsePreconditionFailed("Collection was modified after X-If-Unmodified-Since")
         bso = get_object_or_404(StorageObject, collection=collection, bsoid=bsoid)
         bso.delete()
         return response_json({})
