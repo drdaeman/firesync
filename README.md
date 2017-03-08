@@ -26,11 +26,11 @@ Some, but not all known security issues:
    Better not rely on JS crypto, it'd only give a false sense of security.
 
 2. PyBrowserID library has broken RSA implementation that's silently used
-   if M2Crypto is not available. There's a hack in settings.py that
-   forcibly prevents PyBrowserID from even trying to work if M2Crypto
-   is missing, but if you're embedding this into some existing project,
-   you should be aware of this issue.
-   
+   if M2Crypto (or PyCryptodome as its drop-in replacement) is not available.
+   There's a hack in `settings.py` that forcibly prevents PyBrowserID from
+   even trying to work if M2Crypto is missing, but if you're embedding this
+   into some existing project, you should be aware of this issue.
+
 3. The whole Mozilla Services system is a complicated mess (in my personal
    opinion). The particular issue is that documentation about how those
    things are used is scarce in some areas - the general picture
@@ -52,20 +52,20 @@ What (hopefully) works
   services, but it issues tokens that are understood by our
   Sync service and that should be enough, at least for starters.
   
-- Some parts of Sync service are here. But it's not yet complete,
-  at least I wasn't able to make two Firefox instances sync with
-  each other.
+- Some parts of Sync service are here. I was able to get two
+  Firefox instances sync with each other, although there were
+  some occasional problems (e.g. not seeing other browser's updates)
+  that I haven't debugged yet.
 
-- Profiles return username, email address and a random picture
-  (from lorempixel.com). This uses very primitive OAuth2 token
-  server implementation that's not suitable for storing any
-  really private data. So, be sure to read the source code
-  about the limitations.
+- Profiles return username, email address and a static picture.
+  This uses very primitive OAuth2 token server implementation
+  that's not suitable for storing any really private data.
+  So, be sure to read the source code about the limitations.
 
 What doesn't (TODO)
 -------------------
 
-- Sync still doesn't work.
+- Sync implementation is incomplete.
 
 - Profile editing is not implemented.
 
