@@ -8,7 +8,7 @@ import time
 from decorator import decorator
 from django.conf import settings
 from django.db import transaction
-from django.http.response import HttpResponse, HttpResponseForbidden
+from django.http.response import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils.timezone import UTC
 from django.views.decorators.csrf import csrf_exempt
@@ -23,6 +23,14 @@ logger = logging.getLogger("mnemosyne.views")
 # TODO: Pemove DEBUG_DUMP_PASSWORD and any related code when we get closer to release quality.
 DEBUG_DUMP_PASSWORD = None
 assert settings.DEBUG or DEBUG_DUMP_PASSWORD is None  # Safety
+
+
+class HttpResponseNotAuthorized(HttpResponse):
+    status_code = 401
+
+
+class HttpResponseMethodNotAllowed(HttpResponse):
+    status_code = 405
 
 
 def response_json(data, response_class=HttpResponse, timestamp_header="Timestamp", timestamp_on=[200]):
@@ -41,8 +49,7 @@ def token_required(token_type):
         if hawk_token is not None and hawk_token.token_type == token_type:
             return f(request, *args, **kwargs)
         else:
-            # FIXME: This isn't a correct response. Should be 401.
-            return HttpResponseForbidden("Failed to validate HAWK token")
+            return HttpResponseNotAuthorized("Failed to validate HAWK token")
     return _token_required
 
 
@@ -191,4 +198,4 @@ def storage_object(request, collection_name, bsoid):
         bso.delete()
         return response_json({})
     else:
-        raise RuntimeError("405 Method Not Allowed")  # FIXME: Return a proper HTTP 405 response here
+        return HttpResponseMethodNotAllowed("405 Method not allowed")
