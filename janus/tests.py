@@ -57,7 +57,7 @@ class KnownVectorsTestCase(TestCase):
 
     def test_client_stretch_kdf(self):
         """
-        Test implementation against OnePW cient stretch-KDF test vectors
+        Test implementation against OnePW client stretch-KDF test vectors
         https://github.com/mozilla/fxa-auth-server/wiki/onepw-protocol#test-vectors
         """
         ref_email = H("616e6472c3a94065 78616d706c652e6f 7267", "utf-8")

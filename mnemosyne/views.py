@@ -20,7 +20,7 @@ from .models import Collection, StorageObject
 logger = logging.getLogger("mnemosyne.views")
 
 # Debug stuff, negates all security, don't use in production!
-# TODO: Pemove DEBUG_DUMP_PASSWORD and any related code when we get closer to release quality.
+# TODO: Remove DEBUG_DUMP_PASSWORD and any related code when we get closer to release quality.
 DEBUG_DUMP_PASSWORD = None
 assert settings.DEBUG or DEBUG_DUMP_PASSWORD is None  # Safety
 
@@ -33,7 +33,7 @@ class HttpResponseMethodNotAllowed(HttpResponse):
     status_code = 405
 
 
-def response_json(data, response_class=HttpResponse, timestamp_header="Timestamp", timestamp_on=[200]):
+def response_json(data, response_class=HttpResponse, timestamp_header="Timestamp", timestamp_on=(200,)):
     logger.debug("JSON response: %s", json.dumps(data))
     r = response_class(json.dumps(data), content_type="application/json")
     if r.status_code in timestamp_on and timestamp_header is not None:

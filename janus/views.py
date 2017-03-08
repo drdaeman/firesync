@@ -39,7 +39,7 @@ def xor_bytes(a, b):
     return bytes(bytearray(map(lambda pair: pair[0] ^ pair[1], zip(six.iterbytes(a), six.iterbytes(b)))))
 
 
-def response_json(data, response_class=HttpResponse, timestamp_header="Timestamp", timestamp_on=[200]):
+def response_json(data, response_class=HttpResponse, timestamp_header="Timestamp", timestamp_on=(200,)):
     logger.debug("JSON response: %s", json.dumps(data))
     r = response_class(json.dumps(data), content_type="application/json")
     if r.status_code in timestamp_on and timestamp_header is not None:
