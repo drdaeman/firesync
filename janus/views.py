@@ -3,6 +3,7 @@ from __future__ import unicode_literals, absolute_import
 import browserid
 from django.contrib.staticfiles.templatetags.staticfiles import static
 from django.core.signing import TimestampSigner, BadSignature
+from django.http import HttpRequest
 from django.http.response import HttpResponse, HttpResponseBadRequest, HttpResponseServerError
 from django.shortcuts import render, get_object_or_404
 from django.utils.crypto import constant_time_compare
@@ -332,5 +333,5 @@ def profile_profile(request):
     return response_json({
         "uid": user.username,
         "email": user.email,
-        "avatar": request.build_absolute_url(static("profile.png")),
+        "avatar": HttpRequest.build_absolute_uri(request, static("profile.png")),
     })
