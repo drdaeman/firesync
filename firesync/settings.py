@@ -92,7 +92,7 @@ BROWSERID_ISSUER = os.environ.get("BROWSERID_ISSUER", FIRESYNC_HOSTNAME)
 
 # A list of strings representing the host/domain names that this Django site can serve.
 # Usually you don't need to provide one, but specify FIRESYNC_HOSTNAME instead.
-ALLOWED_HOSTS = list(filter(None, os.environ.get("ALLOWED_HOSTS", FIRESYNC_HOSTNAME).split()))
+ALLOWED_HOSTS = list(filter(None, os.environ.get("ALLOWED_HOSTS", FIRESYNC_HOSTNAME.rsplit(":", 1)[0]).split()))
 
 # A list of all the people who get code error notifications.
 # Specified as "User Name <someone@example.org>, Another Name <someone-else@example.net>".
