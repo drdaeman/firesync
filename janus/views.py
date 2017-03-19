@@ -186,6 +186,7 @@ def account_devices(request):
 def account_device(request):
     user = request.hawk_token.user
     data = json.loads(request.body.decode("utf-8"))
+    logger.debug("Request body: %s", json.dumps(data))
 
     device_id = data.get("id", None)
     if device_id is None:
@@ -224,6 +225,7 @@ def account_device(request):
 def account_device_notify(request):
     user = request.hawk_token.user
     data = json.loads(request.body.decode("utf-8"))
+    logger.debug("Request body: %s", json.dumps(data))
 
     assert "to" in data, "Missing to"
     assert "payload" in data, "Missing payload"
@@ -238,6 +240,7 @@ def account_device_destroy(request):
     user = request.hawk_token.user
     data = json.loads(request.body.decode("utf-8"))
     device_id = data.get("id", None)
+    logger.debug("Request body: %s", json.dumps(data))
 
     if device_id is not None:
         logger.info("User %s is deleting their device %s", user.username, device_id)
