@@ -1,5 +1,6 @@
 import collections
 import binascii
+import time
 from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.hashers import make_password
 from django.db import models
@@ -64,3 +65,33 @@ class Keys(models.Model):
             return cls.objects.get(user=user)
         except cls.DoesNotExist:
             return cls.objects.create(user=user, kA=random_token_hex(32), wkB=random_token_hex(32))
+
+
+class Device(models.Model):
+    id = models.CharField(max_length=48, primary_key=True)
+    user = models.ForeignKey(User)
+    name = models.CharField(max_length=256, blank=True)
+    type = models.CharField(max_length=64, blank=True)
+    push_callback = models.TextField(blank=True)
+    push_public_key = models.TextField(blank=True)
+    push_auth_key = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def as_dict(self):
+        """
+        Returns Device representation as a dict,
+        suitable for serializing to JSON and returning to client.
+        """
+        result = {
+            "id": self.id,
+            "name": self.name,
+            "type": self.type,
+            "createdAt": int(time.mktime(self.created_at.utctimetuple()) * 1000)
+        }
+        if self.push_callback:
+            result["pushCallback"] = self.push_callback
+        if self.push_public_key:
+            result["pushPublicKey"] = self.push_public_key
+        if self.push_auth_key:
+            result["pushAuthKey"] = self.push_auth_key
+        return result

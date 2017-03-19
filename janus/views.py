@@ -17,7 +17,7 @@ from django.views.decorators.http import require_POST
 from jwkest.jws import JWS
 from .auth import MozillaOnePWHasher, get_browserid_key, BrowserIDLocalVerifier
 from janus.hkdf import Hkdf
-from janus.models import Keys
+from janus.models import Keys, Device
 from .models import User, Token
 import six
 import json
@@ -25,6 +25,7 @@ import time
 import binascii
 import hashlib
 import hmac
+import uuid
 import logging
 
 
@@ -173,13 +174,76 @@ def account_login(request):
 
 @hawk_required("sessionToken")
 def account_devices(request):
+    user = request.hawk_token.user
     return response_json({
-        "devices": [{
-            "id": "4c352927-cd4f-4a4a-a03d-7d1893d950b8",
-            "type": "computer",
-            "name": "Test device"
-        }]
+        "devices": [d.as_dict() for d in Device.objects.filter(user=user)]
     })
+
+
+@csrf_exempt
+@require_POST
+@hawk_required("sessionToken")
+def account_device(request):
+    user = request.hawk_token.user
+    data = json.loads(request.body.decode("utf-8"))
+
+    device_id = data.get("id", None)
+    if device_id is None:
+        # Register a new device
+        assert "name" in data, "Missing name"  # TODO: Proper validation
+        device_id = uuid.uuid4().hex
+        device = Device.objects.create(
+            id=device_id,
+            user=user,
+            name=data["name"],
+            type=data.get("type", ""),
+            push_callback=data.get("pushCallback", ""),
+            push_public_key=data.get("pushPublicKey", ""),
+            push_auth_key=data.get("pushAuthKey", "")
+        )
+        logger.info("User %s had registered a new device %s ('%s')", user.username, device.id, device.name)
+    else:
+        # Update an existing device
+        device = Device.objects.select_for_update().get(device_id)
+        if "name" in data:
+            device.name = data["name"]
+        if "type" in data:
+            device.type = data["type"]
+        if "pushCallback" in data:
+            device.push_callback = data["pushCallback"]
+        if "pushPublicKey" in data:
+            device.push_public_key = data["pushPublicKey"]
+        if "pushAuthKey" in data:
+            device.push_auth_key = data["pushAuthKey"]
+        logger.info("User %s is updating their device %s ('%s')", user.username, device.id, device.name)
+        device.save()
+    return response_json(device.as_dict())
+
+
+@hawk_required("sessionToken")
+def account_device_notify(request):
+    user = request.hawk_token.user
+    data = json.loads(request.body.decode("utf-8"))
+
+    assert "to" in data, "Missing to"
+    assert "payload" in data, "Missing payload"
+    #  TODO: Actually send a push notification
+    logger.info("(Not implemented) User %s wanted to ping their devices %s", user.username, repr(data["to"]))
+
+    return response_json({})
+
+
+@hawk_required("sessionToken")
+def account_device_destroy(request):
+    user = request.hawk_token.user
+    data = json.loads(request.body.decode("utf-8"))
+    device_id = data.get("id", None)
+
+    if device_id is not None:
+        logger.info("User %s is deleting their device %s", user.username, device_id)
+        Device.objects.filter(id=device_id).delete()
+
+    return response_json({})
 
 
 @hawk_required("keyFetchToken")
