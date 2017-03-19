@@ -26,11 +26,9 @@
 
     <script src="{% static 'common.js' %}"></script>
     <script type="text/javascript">
-        window.addEventListener("message", function (event) {
-            var result = event.data.content;
-            var type = event.data.type;
-
-            console.log("Received message:", type, result);
+        window.addEventListener("WebChannelMessageToContent", function (event) {
+            var detail = event.detail;
+            console.log("Received message:", detail);
         }, false);
 
         document.getElementById("login-form").addEventListener("submit", function (event) {
@@ -47,7 +45,7 @@
                     var data = JSON.parse(this.responseText);
                     data["email"] = email;
                     // data["unwrapBKey"] = unwrapBKey;
-                    send("login", data);
+                    send("fxaccounts:login", data);
                 }
             };
             r.send(JSON.stringify({
