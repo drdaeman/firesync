@@ -24,19 +24,9 @@
         <div id="footer"></div>
     </div>
 
+    <script src="{% static 'common.js' %}"></script>
     <script type="text/javascript">
-        function send(command, data) {
-            var event = new window.CustomEvent("FirefoxAccountsCommand", {
-                detail: {
-                    command: command,
-                    data: data,
-                    bubbles: true
-                }
-            });
-            window.dispatchEvent(event);
-        }
-
-        this.window.addEventListener("message", function (event) {
+        window.addEventListener("message", function (event) {
             var result = event.data.content;
             var type = event.data.type;
 
