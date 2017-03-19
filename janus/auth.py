@@ -62,17 +62,18 @@ class MozillaOnePWHasher(BasePasswordHasher):
 def _lookup_token(sender_id):
     try:
         token = Token.objects.get(token_id=sender_id)
-        # I'm sure at some moment some Firefox versions wanted raw binary strings and were
-        # producing invalid HAWK signatures otherwise. However, I'm currently (2017-03) having
-        # issue with Firefox for Android, and from the tokenlib source it seems that keys
-        # should be base64-encoded.
+        # I'm sure desktop Firefox (54.0a2) wants raw binary strings and produces
+        # invalid HAWK signatures otherwise.
+        #
+        # This doesn't seem to work with Firefox for Android, though (cause unknown)
+        # and contradicts tokenlib source where it seems that keys should be base64-encoded.
         #
         # https://github.com/mozilla-services/tokenserver/blob/c62b8519/tokenserver/views.py#L294
         # https://github.com/mozilla-services/tokenlib/blob/e270a029/tokenlib/__init__.py#L158
         # https://github.com/mozilla-services/tokenlib/blob/e270a029/tokenlib/utils.py#L69
         return {
             "id": token.token_id,
-            "key": base64.urlsafe_b64encode(binascii.a2b_hex(token.expand().hmac_key)).decode("ascii"),
+            "key": binascii.a2b_hex(token.expand().hmac_key),
             "algorithm": "sha256",
             "x-token-object": token
         }
