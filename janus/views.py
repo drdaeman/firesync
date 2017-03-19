@@ -205,7 +205,7 @@ def account_device(request):
         logger.info("User %s had registered a new device %s ('%s')", user.username, device.id, device.name)
     else:
         # Update an existing device
-        device = Device.objects.select_for_update().get(device_id)
+        device = Device.objects.select_for_update().get(id=device_id, user=user)
         if "name" in data:
             device.name = data["name"]
         if "type" in data:
