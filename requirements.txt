@@ -1,4 +1,4 @@
-django
+django>=1.10
 django-sslserver
 decorator
 mohawk
