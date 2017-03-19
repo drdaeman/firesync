@@ -313,7 +313,7 @@ def session_destroy(request):
 @csrf_exempt
 @browserid_required(timestamp_header="X-Timestamp")
 def token_sync(request):
-    uid = request.browserid_user.username
+    uid = request.browserid_user.id
     token = Token.issue("x-sync-token", request.browserid_user)
     logger.debug("Issued sync token: " + repr(token))
     # Mozilla services use tokenlib here and encode everything in token ID.
