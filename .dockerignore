@@ -1,4 +1,4 @@
-.virtualenv
+.virtualenv*
 .vagrant
 .idea
 *.pem

@@ -1,7 +1,7 @@
 *.sqlite3
 *.pem
 secret-key.dat
-/.virtualenv/
+/.virtualenv*/
 __pycache__/
 *.py[cod]
 /.vagrant
