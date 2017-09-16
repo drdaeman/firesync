@@ -191,6 +191,7 @@ TEMPLATES = [
 
 # Logging
 
+LOGGING_DEBUG = DEBUG
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -209,14 +210,19 @@ LOGGING = {
         },
     },
     'loggers': {
+        'mohawk': {
+            'handlers': ['console'],
+            'level': 'DEBUG' if LOGGING_DEBUG else 'INFO',
+            'propagate': True,
+        },
         'janus': {
             'handlers': ['console'],
-            'level': 'DEBUG' if DEBUG else 'INFO',
+            'level': 'DEBUG' if LOGGING_DEBUG else 'INFO',
             'propagate': True,
         },
         'mnemosyne': {
             'handlers': ['console'],
-            'level': 'DEBUG' if DEBUG else 'INFO',
+            'level': 'DEBUG' if LOGGING_DEBUG else 'INFO',
             'propagate': True,
         },
     },
