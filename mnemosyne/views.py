@@ -11,7 +11,7 @@ from django.db import transaction
 from django.db.models import Count
 from django.http.response import HttpResponse
 from django.shortcuts import get_object_or_404
-from django.utils.timezone import UTC
+from django.utils.timezone import utc
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 
@@ -38,11 +38,20 @@ class HttpResponsePreconditionFailed(HttpResponse):
     status_code = 412
 
 
-def response_json(data, response_class=HttpResponse, timestamp_header="Timestamp", timestamp_on=(200,)):
+def response_json(data, response_class=HttpResponse, timestamp_header="Timestamp", timestamp_on=(200,), last_modified=None):
     logger.debug("JSON response: %s", json.dumps(data))
     r = response_class(json.dumps(data), content_type="application/json")
+    now = str(int(time.time()))
     if r.status_code in timestamp_on and timestamp_header is not None:
-        r[timestamp_header] = int(time.time())
+        r[timestamp_header] = now
+    r["X-Weave-Timestamp"] = now  # Documentation says it must always be present
+    if last_modified:
+        if isinstance(last_modified, (tuple, list)):
+            last_modified = last_modified[0]
+        r["X-Last-Modified"] = str(last_modified)
+        logger.info("Using X-Last-Modified %s", repr(last_modified))
+    else:
+        logger.info("Warning! Response has no X-Last-Modified header")  # Protocol violation
     return r
 
 
@@ -61,10 +70,11 @@ def token_required(token_type):
 @token_required("x-sync-token")
 def info_collections(request):
     user = request.hawk_token.user
-    return response_json({
+    data = {
         collection.name: collection.modified_ts
         for collection in Collection.objects.filter(user=user)
-    })
+    }
+    return response_json(data, last_modified=max(ts for ts in data.values()))
 
 
 @token_required("x-sync-token")
@@ -78,13 +88,13 @@ def info_collection_usage(request):
     return response_json({
         collection.name: collection.bso_count
         for collection in Collection.objects.filter(user=user).annotate(bso_count=Count("storageobject"))
-    })
+    }, last_modified=collection.modified_ts)
 
 
 @token_required("x-sync-token")
 def info_configuration(request):
     # We don't impose any limits at the moment.
-    return response_json({})
+    return response_json({}, last_modified=0)
 
 
 def _put_bso(collection, bsoid, data):
@@ -96,7 +106,7 @@ def _put_bso(collection, bsoid, data):
         expires = None if "ttl" not in data else timezone.now() + datetime.timedelta(seconds=data["ttl"])
         bso = StorageObject.objects.create(collection=collection, bsoid=bsoid,
                                            payload=data.get("payload", None),
-                                           sortindex=data.get("sortindex", None),
+                                           sortindex=data.get("sortindex", 0),
                                            expires=expires)
     return bso
 
@@ -125,11 +135,12 @@ def storage_collection(request, collection_name):
                 # We had updated something - touch the collection's last modification date
                 collection.modified = timezone.now()
                 collection.save(update_fields=["modified"])
+            modified = bso.modified_ts if bso is not None else 0,   # None here breaks Android (does it?)
             return response_json({
-                "modified": bso.modified_ts if bso is not None else None,
+                "modified": modified,
                 "success": list(bsoids),
                 "failed": {}   # TODO: We really never fail?
-            })
+            }, last_modified=modified)
         elif request.method == "DELETE" and "ids" in request.GET:
             for bsoid in request.GET.getlist("ids"):
                 try:
@@ -144,7 +155,7 @@ def storage_collection(request, collection_name):
                     collection.save()
             return response_json({
                 "modified": collection.modified_ts
-            })
+            }, last_modified=collection.modified_ts)
         else:
             # Should never happen, unless parent "if" and this "if" are not in sync.
             raise RuntimeError("Something went wrong. The code hadn't covered this %s request" % request.method)
@@ -153,7 +164,7 @@ def storage_collection(request, collection_name):
 
     if request.method == "DELETE":
         collection.delete()
-        return response_json({})
+        return response_json({}, last_modified=int(time.time()))
     elif request.method == "GET":
         bso_qs = collection.storageobject_set.all()
 
@@ -166,7 +177,10 @@ def storage_collection(request, collection_name):
             bso_qs = bso_qs.order_by("-sortindex")
 
         if "newer" in request.GET:
-            newer_than = datetime.datetime.utcfromtimestamp(int(request.GET["newer"])).replace(tzinfo=UTC())
+            newer_than = request.GET["newer"]
+            if "." in newer_than:
+                newer_than, _ignore = newer_than.split(".", 1)  # Ignore the fractional part, e.g. "0.000" -> "0"
+            newer_than = datetime.datetime.utcfromtimestamp(int(newer_than)).replace(tzinfo=utc)
             logger.debug("Requested BSOs newer than %s (%s)", newer_than.strftime("%Y-%m-%dT%H:%M:%SZ"),
                          time.mktime(newer_than.timetuple()))
             bso_qs = bso_qs.filter(modified__gt=newer_than)
@@ -181,12 +195,17 @@ def storage_collection(request, collection_name):
                     logger.debug("[!!!] Returning %s", bso.debug_dump(user, DEBUG_DUMP_PASSWORD))
             result = [bso.as_dict() for bso in bso_qs]
 
+        last_modified = max(ts.timestamp() for ts in bso_qs.values_list("modified", flat=True)) or 0
         logger.debug("HTTP Accept: %s", request.META.get("HTTP_ACCEPT", None))
         accept = request.META.get("HTTP_ACCEPT", None)
         if "application/newlines" == accept:
-            return HttpResponse("\n".join(map(json.dumps, result)), content_type="application/newlines")
+            res = HttpResponse("\n".join(map(json.dumps, result)), content_type="application/newlines")
+            res["X-Weave-Timestamp"] = str(int(time.time()))
+            res["X-Last-Modified"] = str(last_modified)
+            logger.info("Responding with X-Last-Modified %s", repr(last_modified))
+            return res
         else:
-            return response_json(result)
+            return response_json(result, last_modified=last_modified)
 
     raise RuntimeError("Sorry, not implemented yet")  # TODO: FIXME: Implement this
 
@@ -199,7 +218,7 @@ def storage_object(request, collection_name, bsoid):
 
     if_unmodified_since = request.META.get("HTTP_X_IF_UNMODIFIED_SINCE", None)
     if if_unmodified_since:
-        if_unmodified_since = datetime.datetime.utcfromtimestamp(int(if_unmodified_since)).replace(tzinfo=UTC())
+        if_unmodified_since = datetime.datetime.utcfromtimestamp(int(if_unmodified_since)).replace(tzinfo=utc)
 
     if request.method == "GET":
         collection = get_object_or_404(Collection, user=user, name=collection_name)

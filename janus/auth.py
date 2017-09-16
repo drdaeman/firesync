@@ -71,6 +71,14 @@ def _lookup_token(sender_id):
         # https://github.com/mozilla-services/tokenserver/blob/c62b8519/tokenserver/views.py#L294
         # https://github.com/mozilla-services/tokenlib/blob/e270a029/tokenlib/__init__.py#L158
         # https://github.com/mozilla-services/tokenlib/blob/e270a029/tokenlib/utils.py#L69
+        #
+        # NOTE: (added at a later time) this could be actually a misunderstanding on my side,
+        #       caused by reuse of tokens for sync auth.
+        #
+        #       Those (x-sync-token) must be printable for Android to work, while
+        #       non-sync ones (sessionToken and keyFetch) are expected to be raw.
+        #
+        #       Check views.token_sync for more info.
         return {
             "id": token.token_id,
             "key": binascii.a2b_hex(token.expand().hmac_key),
@@ -80,6 +88,11 @@ def _lookup_token(sender_id):
     except Token.DoesNotExist:
         logger.error("No such token: %s", sender_id)
         raise mohawk.exc.CredentialsLookupError("Unknown or invalid token")
+
+def _lookup_token_b64(sender_id):
+    token = _lookup_token(sender_id)
+    token["key"] = base64.b64encode(token["key"])
+    return token
 
 
 class HawkAuthenticationMiddleware(object):
@@ -112,8 +125,12 @@ class HawkAuthenticationMiddleware(object):
                     content_type = "application/json"
             else:
                 content = request.body
+            lookup = _lookup_token
+            if "android" in request.META.get("HTTP_USER_AGENT", "").lower() and "sync" in request.path:
+                # XXX: This is a hack. See views.token_sync for details.
+                lookup = _lookup_token_b64
             receiver = mohawk.Receiver(
-                _lookup_token,
+                lookup,
                 authorization,
                 uri,
                 request.method,

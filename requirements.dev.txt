@@ -1,0 +1,10 @@
+Django>=1.10
+django-sslserver
+decorator
+mohawk
+pyjwkest>=1.1.7
+cryptography
+PyBrowserID
+pycryptodome
+django-cors-headers
+whitenoise

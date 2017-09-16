@@ -37,7 +37,7 @@ class StorageObject(models.Model):
         return {
             "id": self.bsoid,
             "modified": self.modified_ts,
-            "sortindex": self.sortindex,
+            "sortindex": self.sortindex or 0,
             "payload": self.payload
         }
 

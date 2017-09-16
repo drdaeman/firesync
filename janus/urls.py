@@ -20,5 +20,8 @@ urlpatterns = [
     url(r"^1\.0/sync/1\.5$", views.token_sync),
 
     url(r"^oauth/v1/authorization$", views.oauth_authorization),
+    url(r"^oauth/v1/destroy$", views.oauth_destroy),
     url(r"^profile/v1/profile$", views.profile_profile),
+
+    url(r"^\.well-known/browserid$", views.browserid),
 ]

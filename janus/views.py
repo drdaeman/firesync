@@ -27,6 +27,7 @@ import hashlib
 import hmac
 import uuid
 import logging
+import base64
 
 
 logger = logging.getLogger("janus.views")
@@ -175,9 +176,9 @@ def account_login(request):
 @hawk_required("sessionToken")
 def account_devices(request):
     user = request.hawk_token.user
-    return response_json({
-        "devices": [d.as_dict() for d in Device.objects.filter(user=user)]
-    })
+    # Was {"devices": [...]} once upon a time, but seems that current APIs just return the list.
+    # In particular, sync on Android will break if this is not a list.
+    return response_json([d.as_dict() for d in Device.objects.filter(user=user)])
 
 
 @csrf_exempt
@@ -303,6 +304,20 @@ def certificate_sign(request):
 
 
 @csrf_exempt
+def browserid(request):
+    key = get_browserid_key()
+    return response_json({
+        "public-key": {
+            "algorithm": "RS",
+            "e": str(key.e),
+            "n": str(key.n),
+        },
+        "authentication": "/signin",
+        "provisioning": "/",
+    })
+
+
+@csrf_exempt
 @require_POST
 @hawk_required("sessionToken")
 def session_destroy(request):
@@ -322,11 +337,21 @@ def token_sync(request):
     # sharing Janus Tokens, we just generate one.
     # The tricky (and possibly fragile) part is that "key" must be passed RAW,
     # not base64- or hex-encoded, or the validation will fail.
-    sync_api_uri = '%s://%s%s' % (request.scheme, request.get_host(), "/sync/1.5/")
+    sync_api_uri = '%s://%s%s' % (request.scheme, request.get_host(), "/sync/1.5")  # Note: trailing slash here breaks Android
+    key = binascii.a2b_hex(token.expand().hmac_key)
+    logger.info("User-agent: %s", request.META.get("HTTP_USER_AGENT", ""))
+    if "android" in request.META.get("HTTP_USER_AGENT", "").lower():
+        # XXX: HACK: For Android, use base64-encoded tokens
+        # Raw tokens seem to work for the desktop browsers, but not on Android.
+        # This is caused by the "reuse" of the Janus tokens here.
+        # TODO: Use base64-encoded tokens (of course, for sync only) for all platforms?
+        key = base64.b64encode(key).decode("ascii")
+    key = force_text(key, encoding="latin-1")
     return response_json({
         "id": force_text(token.token_id, encoding="ascii"),
-        "key": force_text(binascii.a2b_hex(token.expand().hmac_key), encoding="latin-1"),
+        "key": key,
         "uid": uid,
+        "hashed_fxa_uid": "",  # used only for telemetry, so screw it
         "api_endpoint": sync_api_uri,
         "duration": 3600,
         "hashalg": "sha256"
@@ -356,10 +381,11 @@ def oauth_authorization(request):
     data = json.loads(request.body.decode("utf-8"))
 
     # Currently, ONLY "profile" scope is supported, only with "token" response type.
+    # Update: There is also some limited support for "sync:addon_storage" scope.
     # That's what my Firefox seem to request (as usually, totally undocumented,
     # the fxa-oauth-server documentation only mention "code" flow), so that's all that's supported.
-    assert data["scope"] == "profile"
-    assert data["response_type"] == "token"
+    assert data["scope"] in ("profile", "sync:addon_storage"), "Unsupported scope: %s" % data["scope"]
+    assert data["response_type"] == "token", "Unsupported response type: %s" % data["response_type"]
 
     audience = ["%s/oauth/v1" % request.get_host()]
     try:
@@ -371,14 +397,21 @@ def oauth_authorization(request):
         return response_json({"error": "Not authorized"}, response_class=HttpResponseNotAuthorized)
     logger.debug("profile_authorization: BrowserID assertion verified: %s", repr(verification))
 
-    access_token = TimestampSigner(salt="oauth:token:profile").sign(verification["email"])
+    access_token = TimestampSigner(salt="oauth:token:%s" % data["scope"]).sign(verification["email"])
     return response_json({
         "access_token": urlsafe_base64_encode(access_token.encode("utf-8")).decode("ascii"),
-        "scope": "profile",
+        "scope": data["scope"],
         "token_type": "bearer",
         "expires_in": 3600,
         "auth_at": int(time.time()),
     })
+
+
+@csrf_exempt
+@require_POST
+def oauth_destroy(request):
+    # Currently, this does nothing. Tokens are indestructible.
+    return HttpResponse("", status=200)
 
 
 @csrf_exempt
