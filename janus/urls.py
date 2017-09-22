@@ -21,6 +21,7 @@ urlpatterns = [
 
     url(r"^oauth/v1/authorization$", views.oauth_authorization),
     url(r"^oauth/v1/destroy$", views.oauth_destroy),
+    url(r"^oauth/v1/verify$", views.oauth_verify),
     url(r"^profile/v1/profile$", views.profile_profile),
 
     url(r"^\.well-known/browserid$", views.browserid),

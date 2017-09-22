@@ -374,17 +374,20 @@ def oauth_authorization(request):
     # Here goes the THIRD protocol Mozilla uses for authorization - OAuth.
     # Because I want to save myself from the pains of implementing it, I'm doing the least necessary.
     # I'm using the fact OAuth tokens are opaque, and just throwing in some django.core.signing stuff.
-    # That is, the tokens are not something random that's kept in the database, but just signed email
-    # addresses with timestamps. The downside, there's no revocation. But, meh, currently I don't care
-    # about securing the profile data, given that there isn't anything really private there, yet.
-    # Sorry if you feel differently about this.
+    # That is, the tokens are not something random that's kept in the database, but just signed JSON
+    # document with the email address, etc. The downside, there's no revocation. But, meh, currently
+    # I don't care about securing the profile data, given that there isn't anything really private
+    # there, yet. Sorry if you feel differently about this.
     data = json.loads(request.body.decode("utf-8"))
 
     # Currently, ONLY "profile" scope is supported, only with "token" response type.
     # Update: There is also some limited support for "sync:addon_storage" scope.
     # That's what my Firefox seem to request (as usually, totally undocumented,
     # the fxa-oauth-server documentation only mention "code" flow), so that's all that's supported.
-    assert data["scope"] in ("profile", "sync:addon_storage"), "Unsupported scope: %s" % data["scope"]
+    scopes = data["scope"].split()
+    for scope in scopes:
+        assert scope in ("profile", "sync:addon_storage"), "Unsupported scope %s in %s" % (scope, data["scope"])
+
     assert data["response_type"] == "token", "Unsupported response type: %s" % data["response_type"]
 
     audience = ["%s/oauth/v1" % request.get_host()]
@@ -397,7 +400,9 @@ def oauth_authorization(request):
         return response_json({"error": "Not authorized"}, response_class=HttpResponseNotAuthorized)
     logger.debug("profile_authorization: BrowserID assertion verified: %s", repr(verification))
 
-    access_token = TimestampSigner(salt="oauth:token:%s" % data["scope"]).sign(verification["email"])
+    to_sign = json.dumps({"email": verification["email"], "scopes": scopes})
+    access_token = TimestampSigner(salt="oauth:token").sign(to_sign)
+
     return response_json({
         "access_token": urlsafe_base64_encode(access_token.encode("utf-8")).decode("ascii"),
         "scope": data["scope"],
@@ -415,6 +420,24 @@ def oauth_destroy(request):
 
 
 @csrf_exempt
+@require_POST
+def oauth_verify(request):
+    data = json.loads(request.body.decode("utf-8"))
+    token = data["token"]
+    try:
+        token = urlsafe_base64_decode(token)
+        token_data = json.loads(TimestampSigner(salt="oauth:token").unsign(token, max_age=3600))
+    except BadSignature:
+        return HttpResponse('{"error": "Invalid token"}', status=401, content_type="application/json")
+    return response_json({
+      "user": token_data["email"],
+      "client_id": "default",
+      "scope": token_data["scopes"],
+      "email": token_data["email"],
+    })
+
+
+@csrf_exempt
 def profile_profile(request):
     try:
         token = request.META.get("HTTP_AUTHORIZATION", "").split(None, 1)
@@ -422,7 +445,10 @@ def profile_profile(request):
         if len(token) == 2 and token[0].lower() == "bearer":
             token = urlsafe_base64_decode(token[1])
             logger.debug("profile: decoded token %s", repr(token))
-            email = TimestampSigner(salt="oauth:token:profile").unsign(token, max_age=3600)
+            token_data = json.loads(TimestampSigner(salt="oauth:token").unsign(token, max_age=3600))
+            if "profile" not in token_data["scopes"]:
+                raise KeyError("OAuth token is not valid for 'profile' scope")
+            email = token_data["email"]
         else:
             raise KeyError("Unacceptable or missing 'Authorization' header")
     except (KeyError, BadSignature):
