@@ -11,8 +11,8 @@ RUN apk add --no-cache --virtual .build-deps python3-dev gcc musl-dev libffi-dev
  && apk del .build-deps
 
 # Hack: patch PyBrowserID (dirty, sorry about this)
-COPY cio.py /usr/local/lib/python3.6/site-packages/browserid/crypto/cio.py
-RUN sed -ie 's/browserid\.crypto\.m2/browserid.crypto.cio/' /usr/local/lib/python3.6/site-packages/browserid/crypto/__init__.py
+COPY cio.py /usr/local/lib/python3.7/site-packages/browserid/crypto/cio.py
+RUN sed -ie 's/browserid\.crypto\.m2/browserid.crypto.cio/' /usr/local/lib/python3.7/site-packages/browserid/crypto/__init__.py
 
 COPY . /opt/firesync
 RUN python manage.py collectstatic --noinput
